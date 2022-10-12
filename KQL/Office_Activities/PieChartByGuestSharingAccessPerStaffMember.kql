@@ -1,0 +1,10 @@
+OfficeActivity
+| where TimeGenerated > ago(365d)
+| where OfficeWorkload == "OneDrive"
+| where UserId startswith "urn:spo:guest#"
+| where SourceFileName != ""
+| extend StaffURL = tostring(Site_Url)
+| extend StaffName1 = split(StaffURL,"personal/",1)[0] // You will need to change this line to match your username
+| extend StaffName = split(StaffName1,"_",0)[0] // You will need to change this line to match your username
+| summarize count() by tostring(StaffName)
+| render piechart
