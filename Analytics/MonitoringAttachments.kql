@@ -1,0 +1,5 @@
+OfficeActivity
+| where RecordType == "ExchangeItem"
+| where Operation contains "update"
+| where parse_json(tostring(parse_json(Item).ParentFolder)).Path == "\\Sent Items"
+| where isnotempty(parse_json(Item).Attachments)
