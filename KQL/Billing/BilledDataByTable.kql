@@ -1,0 +1,8 @@
+let ReportTime = 180d;
+union withsource=table * 
+| where TimeGenerated > ago(ReportTime)
+| project TimeGenerated, _BilledSize, _IsBillable, table
+| where _isBillable=true
+| summarize BilledDataInMB = sumif(_BilledSize/1024/1024, _IsBillable=~true),
+            FreeDataInMB = sumif(_BilledSize/1024/1024, _IsBillable=~false) by table
+| sort by BilledDataInMB desc 
