@@ -1,0 +1,7 @@
+let ReportTimeInDays = 720d;
+union withsource=table * 
+| where TimeGenerated > ago(ReportTimeInDays)
+| project TimeGenerated, _BilledSize, _IsBillable, Computer, _ResourceId
+| where _isBillable=true and isnotempty(Computer)
+| summarize BilledDataInMB = sumif(_BilledSize/1024/1024, _IsBillable=~true) by bin(TimeGenerated, 1d)
+| render areachart

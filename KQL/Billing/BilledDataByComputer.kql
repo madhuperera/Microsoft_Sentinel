@@ -1,0 +1,14 @@
+let ReportTimeInDays = 30d;
+union withsource=table * 
+| where TimeGenerated > ago(ReportTimeInDays)
+| project _BilledSize, _IsBillable, Computer, _ResourceId
+| where _isBillable=true and isnotempty(Computer) 
+| summarize billedData = sumif(_BilledSize, _IsBillable=~true),
+            freeData   = sumif(_BilledSize, _IsBillable=~false) by Computer 
+| extend Total_Data = billedData + freeData
+| extend BilledDataInMB = billedData / 1024 / 1024
+| extend BilledDataInGB = billedData / 1024 / 1024 / 1024
+| extend FreeDataInMB = freeData / 1024 / 1024
+| extend FreeDataInGB = freeData / 1024 / 1024 / 1024
+| project-away billedData, freeData          
+| order by Computer asc
