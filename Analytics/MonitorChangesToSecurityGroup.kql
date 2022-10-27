@@ -5,8 +5,12 @@ let MonitoredADGroups = dynamic(["AdminAgents","HelpdeskAgents","SalesAgents"]);
 // Define a List of Operations to Monitor
 let MonitoredOperations = dynamic(["Add member to group","Add owner to group","Update group","Remove member from group","Hard Delete group","Delete group","Remove owner from group"]);
 // Define how far you want to check the logs for
-let NumOfDays = 1d;
+let NumOfDays = 60d;
 AuditLogs
 | where TimeGenerated > ago(NumOfDays)
 | where Category in (MonitoredCategories)
 | where OperationName in (MonitoredOperations)
+| extend TargetedGroupName = iff(OperationName contains "Update group", tostring(parse_json(TargetResources[0]).displayName),
+    iff(OperationName contains "Add", tostring(parse_json(TargetResources[0]).modifiedProperties[1].newValue),
+    iff(OperationName contains "Remove", tostring(parse_json(TargetResources[0]).modifiedProperties[1].oldValue),"Unexpected Condition for Group Name")))
+| extend TargetedGroupName = trim("\"",TargetedGroupName)
