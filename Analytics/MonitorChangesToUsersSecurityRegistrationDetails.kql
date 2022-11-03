@@ -12,6 +12,7 @@ AuditLogs
 | extend AdministratorIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
 | extend AffectedUserAccountId = tostring(parse_json(tostring(TargetResources[0])).userPrincipalName)
 | extend AffectedUserAccountName = tostring(parse_json(tostring(TargetResources[0])).displayName)
-| extend timestamp = TimeGenerated, AccountCustomEntity = AffectedUserAccountId, IPCustomEntity = AdministratorIPAddress
+| extend AccountCustomEntity = AffectedUserAccountName
+| extend IPCustomEntity = AdministratorIPAddress
 | sort by TimeGenerated desc
-| project TimeGenerated, OperationName, ResultDescription, Result, AdministratorID, AdministratorName, AdministratorIPAddress, AffectedUserAccountId, AffectedUserAccountName, timestamp, AccountCustomEntity, IPCustomEntity
+| project TimeGenerated, OperationName, ResultDescription, Result, AdministratorID, AdministratorName, AdministratorIPAddress, AffectedUserAccountId, AffectedUserAccountName, AccountCustomEntity, IPCustomEntity
