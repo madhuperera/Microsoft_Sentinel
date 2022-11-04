@@ -1,0 +1,13 @@
+let InternalDomains = dynamic(["sonitlo.com","sonitlo.onmicrosoft.com"]); // List of Internal Domains
+let FileTypesToIgnore = dynamic(["png","jpeg","gif"]); // List of File Types to Ignore
+let ReportPeriod = 90d; // Report Period
+EmailAttachmentInfo
+| where TimeGenerated > ago(ReportPeriod)
+| extend SenderDomain = tostring(split(SenderFromAddress, "@")[1])
+| extend RecipientDomain = tostring(split(RecipientEmailAddress, "@")[1])
+| where SenderDomain in (InternalDomains)
+| where RecipientDomain !in (InternalDomains)
+| where FileType !in (FileTypesToIgnore)
+// Reporting
+| summarize count() by bin(TimeGenerated, 1d)
+| render areachart 
