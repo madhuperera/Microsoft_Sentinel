@@ -1,0 +1,10 @@
+let FolderPathToMonitor = "folder_name"; // Ex: ProjectPegasus
+let ReportTimePeriod = 30d;
+let BinPeriod = 1h;
+let FileActionTypesToIgnore = dynamic(["FileCreated","FileRenamed"]);
+DeviceFileEvents
+| where TimeGenerated > ago(ReportTimePeriod)
+| where ActionType !in (FileActionTypesToIgnore)
+| where FolderPath contains FolderPathToMonitor
+| summarize FileActivities = count() by bin(TimeGenerated, BinPeriod), InitiatingProcessAccountName
+| render areachart
