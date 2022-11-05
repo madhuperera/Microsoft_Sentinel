@@ -1,0 +1,13 @@
+let AccountsToIgnore = dynamic(["adsync","defaultapppool","msol_asdawwd22"]);
+let ReportTimePeriod = 30d;
+let DeviceToInvestigate = "dc01.banana.local";
+let LogonTypesToIgnore = dynamic(["Unknown", "Service"]);
+DeviceLogonEvents
+| where TimeGenerated > ago(ReportTimePeriod)
+| where AccountName !startswith "dwm-"
+| where DeviceName == DeviceToInvestigate
+| where AccountName !in~ (AccountsToIgnore)
+| where LogonType !in~ (LogonTypesToIgnore)
+| project TimeGenerated, AccountDomain, AccountName, ActionType, AdditionalFields, IsLocalAdmin, LogonType, MachineGroup, Protocol, RemoteDeviceName, RemoteIP, RemoteIPType, RemotePort
+| summarize SuccessfulLogons = countif(ActionType == "LogonSuccess") by bin(TimeGenerated, 8h), AccountName
+| render areachart 
