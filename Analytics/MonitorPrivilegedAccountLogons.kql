@@ -1,0 +1,12 @@
+let ReportPeriod = 90d; // Report Period
+let PrivilegedAccountNames = _GetWatchlist("OP_Priv_Accounts")
+| project AccountName;
+let PrivilegedDevices = _GetWatchlist("Privileged_Devices")
+| project MachineGroup;
+DeviceLogonEvents
+| where TimeGenerated > ago(ReportPeriod)
+| where AccountName in~ (PrivilegedAccountNames) and MachineGroup !in~ (PrivilegedDevices)
+| extend AccountCustomEntity = AccountName
+| extend IPCustomEntity = RemoteIP
+| project TimeGenerated, AccountName, AccountDomain, ActionType, DeviceName, LogonType, MachineGroup, Protocol, RemoteIP, RemoteIPType, RemotePort, AccountCustomEntity, IPCustomEntity
+| sort by TimeGenerated desc
