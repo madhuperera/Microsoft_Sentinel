@@ -8,5 +8,6 @@ DeviceLogonEvents
 | where AccountName in~ (PrivilegedAccountNames) and MachineGroup !in~ (PrivilegedDevices)
 | extend AccountCustomEntity = AccountName
 | extend IPCustomEntity = RemoteIP
-| project TimeGenerated, AccountName, AccountDomain, ActionType, DeviceName, LogonType, MachineGroup, Protocol, RemoteIP, RemoteIPType, RemotePort, AccountCustomEntity, IPCustomEntity
+| extend HostCustomEntity = DeviceName
+| project TimeGenerated, AccountName, AccountDomain, ActionType, DeviceName, LogonType, MachineGroup, Protocol, RemoteIP, RemoteIPType, RemotePort, AccountCustomEntity, IPCustomEntity, HostCustomEntity
 | sort by TimeGenerated desc
