@@ -12,4 +12,5 @@ EmailAttachmentInfo
 | where FileType !in (FileTypesToIgnore)
 // Reporting
 | summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientDomain
+| where NumberOfEmails >= MaxEmailCountThreshold
 | render areachart
