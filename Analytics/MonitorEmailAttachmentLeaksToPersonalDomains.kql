@@ -13,7 +13,8 @@ EmailAttachmentInfo
 | where SenderDomain in (InternalDomains)
 | where RecipientDomain !in (InternalDomains) and RecipientDomain in~ (PDOList)
 | where FileType !in (FileTypesToIgnore)
+| extend AccountCustomEntity = SenderFromAddress
 // Reporting
-| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress
+| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress, SenderFromAddress
 | where NumberOfEmails >= MaxEmailCountThreshold
 | render areachart
