@@ -1,0 +1,19 @@
+let PDOList = externaldata(DomainNames: string,values:dynamic) [@"https://gist.githubusercontent.com/ammarshah/f5c2624d767f91a7cbdc4e54db8dd0bf/raw/660fd949eba09c0b86574d9d3aa0f2137161fc7c/all_email_provider_domains.txt"]
+with (format="txt",ignoreFirstRecord=false)
+| project DomainNames;
+let InternalDomains = dynamic(["sonitlo.com","sonitlo.onmicrosoft.com"]); // List of Internal Domains
+let FileTypesToIgnore = dynamic(["png","jpeg","gif"]); // List of File Types to Ignore
+let ReportPeriod = 90d; // Report Period
+let BinPeriod = 1d; // This is the time intervals to check the count
+let MaxEmailCountThreshold = 30; // Number of Emails for a given Bin Period
+EmailAttachmentInfo
+| where TimeGenerated > ago(ReportPeriod)
+| extend SenderDomain = tostring(split(SenderFromAddress, "@")[1])
+| extend RecipientDomain = tostring(split(RecipientEmailAddress, "@")[1])
+| where SenderDomain in (InternalDomains)
+| where RecipientDomain !in (InternalDomains) and RecipientDomain in~ (PDOList)
+| where FileType !in (FileTypesToIgnore)
+// Reporting
+| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress
+| where NumberOfEmails >= MaxEmailCountThreshold
+| render areachart
