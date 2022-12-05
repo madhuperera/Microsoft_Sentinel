@@ -6,4 +6,4 @@ SigninLogs
 | where TimeGenerated > ago(ReportPeriod)
 | extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)
 | extend LoginHour = hourofday(NZTime)
-| where LoginHour >= OfficeOpenHour and LoginHour <= OfficeCloseHour
+| where LoginHour <= OfficeOpenHour or LoginHour >= OfficeCloseHour
