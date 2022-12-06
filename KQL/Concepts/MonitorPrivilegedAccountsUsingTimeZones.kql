@@ -15,3 +15,7 @@ SigninLogs
 | extend LoginDay = dayofweek(NZTime)
 | extend LoginDay = iff(LoginDay==0d,"Sunday",iff(LoginDay==6d,"Saturday",iff(LoginDay==5d,"Friday",iff(LoginDay==4d,"Thursday",iff(LoginDay==3d,"Wednesday",iff(LoginDay==2d,"Tuesday",iff(LoginDay==1d,"Monday","Error")))))))
 | where LoginHour <= OfficeOpenHour or LoginHour >= OfficeCloseHour or LoginDay in~ (OfficeCloseDays)
+| extend AccountCustomEntity = UserPrincipalName
+| extend IPCustomEntity = IPAddress
+| project TimeGenerated, NZTime, UserPrincipalName, UserDisplayName, LoginDay, Location, AppDisplayName, AuthenticationRequirement, ConditionalAccessStatus, IsInteractive, IPAddress, RiskDetail, RiskState, ResourceDisplayName
+| sort by TimeGenerated desc
