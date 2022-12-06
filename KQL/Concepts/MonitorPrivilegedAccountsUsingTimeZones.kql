@@ -1,0 +1,17 @@
+let PrivilegedAccounts = _GetWatchlist('EITPrivAccounts') // You will need to keep this up to date
+| project AccountUsername;
+let ReportPeriod = 12h;
+let ClientTimeZone = "Pacific/Auckland"; //New Zealand Time Zone
+let OfficeOpenHour = 7; // 7AM
+let OfficeCloseHour = 18; // 6 PM
+let OfficeCloseDays = dynamic(["Saturday","Sunday"]);
+let ExcludedApps = dynamic(["Microsoft Authenticator App"]);
+SigninLogs
+| where TimeGenerated > ago(ReportPeriod)
+| where UserPrincipalName in~ (PrivilegedAccounts)
+| where AppDisplayName !in~ (ExcludedApps)
+| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)
+| extend LoginHour = hourofday(NZTime)
+| extend LoginDay = dayofweek(NZTime)
+| extend LoginDay = iff(LoginDay==0d,"Sunday",iff(LoginDay==6d,"Saturday",iff(LoginDay==5d,"Friday",iff(LoginDay==4d,"Thursday",iff(LoginDay==3d,"Wednesday",iff(LoginDay==2d,"Tuesday",iff(LoginDay==1d,"Monday","Error")))))))
+| where LoginHour <= OfficeOpenHour or LoginHour >= OfficeCloseHour or LoginDay in~ (OfficeCloseDays)
