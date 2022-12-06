@@ -1,4 +1,4 @@
-let PrivilegedAccounts = _GetWatchlist('EITPrivAccounts') // You will need to keep this up to date
+let PrivilegedAccounts = _GetWatchlist('PrivAccounts') // You will need to keep this up to date
 | project AccountUsername;
 let ReportPeriod = 12h;
 let ClientTimeZone = "Pacific/Auckland"; //New Zealand Time Zone
