@@ -1,1 +1,3 @@
-
+Keeper_CL
+| where Category startswith "policy"
+| project AuditTime=timestamp_t, Operation=audit_event_s, ClientIP=remote_address_s, Category, User=username_s
