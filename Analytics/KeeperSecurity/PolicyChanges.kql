@@ -1,4 +1,7 @@
 let ClientTimeZone = "Pacific/Auckland"; //New Zealand Time Zone
+let ReportPeriod = 24h;
 Keeper_CL
+| where TimeGenerated > ago(ReportPeriod)
+| extend NZTime = datetime_utc_to_local(timestamp_t, ClientTimeZone)
 | where Category startswith "policy"
-| project AuditTime=timestamp_t, Operation=audit_event_s, ClientIP=remote_address_s, Category, User=username_s
+| project AuditTime=NZTime, Operation=audit_event_s, ClientIP=remote_address_s, Category, User=username_s
