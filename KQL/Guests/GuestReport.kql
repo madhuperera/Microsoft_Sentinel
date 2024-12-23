@@ -1,0 +1,7 @@
+SigninLogs
+| where TimeGenerated > ago(180d)
+| where UserType !~ "Member"
+| where ResultType == 0
+| where CrossTenantAccessType =~ "passthrough"
+| project Identity, UserDisplayName, UserPrincipalName, AADTenantId, ResourceTenantId, ResourceDisplayName, ConditionalAccessStatus, AppDisplayName, Location
+| summarize count() by ResourceTenantId
