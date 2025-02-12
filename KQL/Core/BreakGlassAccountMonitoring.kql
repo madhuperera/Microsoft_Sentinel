@@ -1,0 +1,9 @@
+let ReportPeriod = 1h;
+let ClientTimeZone = "Pacific/Auckland"; //New Zealand Time Zone
+SigninLogs
+| where TimeGenerated > ago(ReportPeriod)
+| lookup kind=inner _GetWatchlist("EmergencyBreakGlassAccounts")
+    on $left.UserId == $right.SearchKey
+| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)
+| project TimeGenerated, NZTime, UserPrincipalName, UserDisplayName, ConditionalAccessStatus, IsInteractive, IPAddress, RiskDetail, RiskState, ResourceDisplayName
+| sort by TimeGenerated desc
