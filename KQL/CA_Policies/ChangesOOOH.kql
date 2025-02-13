@@ -1,0 +1,18 @@
+let ReportPeriod = 30d;
+let ClientTimeZone = "Pacific/Auckland"; //New Zealand Time Zone
+let OfficeOpenHour = 7; // 7AM
+let OfficeCloseHour = 18; // 6 PM
+let OfficeCloseDays = dynamic(["Saturday","Sunday"]);
+let ExcludedApps = dynamic(["Microsoft Authenticator App"]);
+AuditLogs
+| where TimeGenerated > ago(ReportPeriod)
+| where OperationName has "conditional access"
+| extend ['Conditional Access Policy Name'] = tostring(TargetResources[0].displayName)
+| extend Actor = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)
+| extend LoginHour = hourofday(NZTime)
+| extend LoginDay = dayofweek(NZTime)
+| extend LoginDay = iff(LoginDay==0d,"Sunday",iff(LoginDay==6d,"Saturday",iff(LoginDay==5d,"Friday",iff(LoginDay==4d,"Thursday",iff(LoginDay==3d,"Wednesday",iff(LoginDay==2d,"Tuesday",iff(LoginDay==1d,"Monday","Error")))))))
+| where LoginHour <= OfficeOpenHour or LoginHour >= OfficeCloseHour or LoginDay in~ (OfficeCloseDays)
+| extend AccountCustomEntity = Actor
+| project TimeGenerated, NZTime, OperationName, ['Conditional Access Policy Name'], Actor
