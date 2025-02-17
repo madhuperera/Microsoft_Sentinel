@@ -1,0 +1,11 @@
+let ReportPeriod = 3h;
+let ClientTimeZone = "Pacific/Auckland"; //New Zealand Time Zone
+AuditLogs
+| where TimeGenerated > ago(ReportPeriod)
+| where Category == "AdministrativeUnit" and Result == "success"
+| where OperationName startswith "Remove member"
+| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)
+| extend RemovedMember = tostring(TargetResources[0].userPrincipalName)
+| extend InitiatedBy = tostring(InitiatedBy.user.userPrincipalName)
+| project TimeGenerated, NZTime, OperationName, RemovedMember, InitiatedBy
+| sort by TimeGenerated desc
