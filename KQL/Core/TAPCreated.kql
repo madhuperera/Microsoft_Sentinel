@@ -1,0 +1,14 @@
+let ReportPeriod = 90d;
+let ClientTimeZone = "Pacific/Auckland"; // New Zealand Time Zone
+AuditLogs
+| where TimeGenerated > ago(ReportPeriod)
+| where LoggedByService == "Authentication Methods"
+| where Category == "UserManagement" and ActivityDisplayName =~ "Admin registered security info" and ResultReason =~ "Admin registered temporary access pass method for user"
+| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)
+| extend InitiatedByUsername = tostring(InitiatedBy.user.userPrincipalName)
+| extend TargetUserDisplayName = tostring(TargetResources[0].displayName)
+| extend TargetUsername = tostring(TargetResources[0].userPrincipalName)
+| extend InitiatedByUserDisplayName = Identity
+| extend InitiatedByIP = tostring(InitiatedBy.user.ipAddress)
+| project TimeGenerated, NZTime, InitiatedByUserDisplayName, InitiatedByUsername, InitiatedByIP, TargetUserDisplayName, TargetUsername, ResultReason
+| order by TimeGenerated desc
