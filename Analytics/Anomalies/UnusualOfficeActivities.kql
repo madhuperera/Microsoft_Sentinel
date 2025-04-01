@@ -1,5 +1,6 @@
 let BaselinePreiod = 14d;
 let ReportPeriod = 1d;
+let ChangeThreshold = 100;
 let UnmonitoredUserIds = dynamic(["SHAREPOINT\\system"]);
 let MonitoredOperations = dynamic([
     "AddedToSecureLink",
@@ -41,6 +42,10 @@ let RecentData = OfficeActivity
 | sort by UserId asc, Operation asc, Total desc;
 let CompletedResults = HistoricData
 | join kind=inner RecentData on UserId, Operation
-| project UserId, Operation, HistoryTotal = DailyCount, RecentTotal = Total
+| extend HistoryTotal = DailyCount
+| extend RecentTotal = Total
+| extend ChangeRatio = round(((todouble(HistoryTotal) - todouble(RecentTotal)) / todouble(HistoryTotal)) * 100, 2)
+| project UserId, Operation, HistoryTotal, RecentTotal, ChangeRatio 
 | order by UserId asc, Operation asc;
 CompletedResults
+| where ChangeRatio > ChangeThreshold
