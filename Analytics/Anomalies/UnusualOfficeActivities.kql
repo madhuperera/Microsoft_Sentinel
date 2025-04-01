@@ -1,0 +1,46 @@
+let BaselinePreiod = 14d;
+let ReportPeriod = 1d;
+let UnmonitoredUserIds = dynamic(["SHAREPOINT\\system"]);
+let MonitoredOperations = dynamic([
+    "AddedToSecureLink",
+    "AddedToSharingLink",
+    "ChannelDeleted",
+    "CompanyLinkCreated",
+    "ConnectorAdded",
+    "FileDeleted",
+    "FileDeletedFirstStageRecycleBin",
+    "FileDownloaded",
+    "FileSyncDownloadedFull",
+    "FolderDeleted",
+    "FolderDeletedFirstStageRecycleBin",
+    "HardDelete",
+    "ListDeleted",
+    "ListItemDeleted",
+    "MemberRemoved",
+    "New-InboxRule",
+    "SecureLinkCreated",
+    "SendAs",
+    "SharingLinkCreated",
+    "SharingLinkUpdated",
+    "SiteDeleted",
+    "TeamDeleted",
+    "UpdateInboxRules"
+    ]);
+let HistoricData = OfficeActivity
+| where TimeGenerated > ago(BaselinePreiod)
+| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
+| where UserType == "Regular"
+| summarize Total = count() by bin(TimeGenerated, 1d), UserId, Operation
+| summarize DailyCount = toint(avg(Total)) by UserId, Operation
+| sort by UserId asc, Operation asc, DailyCount desc;
+let RecentData = OfficeActivity
+| where TimeGenerated > ago(ReportPeriod)
+| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
+| where UserType == "Regular"
+| summarize Total = count() by UserId, Operation
+| sort by UserId asc, Operation asc, Total desc;
+let CompletedResults = HistoricData
+| join kind=inner RecentData on UserId, Operation
+| project UserId, Operation, HistoryTotal = DailyCount, RecentTotal = Total
+| order by UserId asc, Operation asc;
+CompletedResults
