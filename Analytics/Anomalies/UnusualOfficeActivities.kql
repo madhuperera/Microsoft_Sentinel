@@ -1,6 +1,8 @@
 let BaselinePreiod = 14d;
 let ReportPeriod = 1d;
 let ChangeThreshold = 100;
+let BaselineCountThreshold = 7;
+let CurrentCountThreshold = 150;
 let UnmonitoredUserIds = dynamic(["SHAREPOINT\\system"]);
 let MonitoredOperations = dynamic([
     "AddedToSecureLink",
@@ -28,24 +30,24 @@ let MonitoredOperations = dynamic([
     "UpdateInboxRules"
     ]);
 let HistoricData = OfficeActivity
-| where TimeGenerated > ago(BaselinePreiod)
+| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))
 | where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
 | where UserType == "Regular"
-| summarize Total = count() by bin(TimeGenerated, 1d), UserId, Operation
-| summarize DailyCount = toint(avg(Total)) by UserId, Operation
-| sort by UserId asc, Operation asc, DailyCount desc;
+| summarize H_Total = count() by bin(TimeGenerated, 1d), UserId, Operation
+| summarize H_DailyCount = toint(avg(H_Total)) by UserId, Operation
+| sort by UserId asc, Operation asc, H_DailyCount desc;
 let RecentData = OfficeActivity
 | where TimeGenerated > ago(ReportPeriod)
 | where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
 | where UserType == "Regular"
-| summarize Total = count() by UserId, Operation
-| sort by UserId asc, Operation asc, Total desc;
+| summarize R_Total = count() by UserId, Operation
+| sort by UserId asc, Operation asc, R_Total desc;
 let CompletedResults = HistoricData
 | join kind=inner RecentData on UserId, Operation
-| extend HistoryTotal = DailyCount
-| extend RecentTotal = Total
-| extend ChangeRatio = round(((todouble(HistoryTotal) - todouble(RecentTotal)) / todouble(HistoryTotal)) * 100, 2)
-| project UserId, Operation, HistoryTotal, RecentTotal, ChangeRatio 
+| extend BaselineCount = H_DailyCount
+| extend CurrentCount = R_Total
+| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)
+| project UserId, Operation, BaselineCount, CurrentCount, ChangeRatio 
 | order by UserId asc, Operation asc;
 CompletedResults
-| where ChangeRatio > ChangeThreshold
+| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold
