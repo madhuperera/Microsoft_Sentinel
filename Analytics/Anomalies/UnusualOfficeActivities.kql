@@ -34,20 +34,27 @@ let HistoricData = OfficeActivity
 | where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
 | where UserType == "Regular"
 | summarize H_Total = count() by bin(TimeGenerated, 1d), UserId, Operation
-| summarize H_DailyCount = toint(avg(H_Total)) by UserId, Operation
-| sort by UserId asc, Operation asc, H_DailyCount desc;
+| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation
+| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;
 let RecentData = OfficeActivity
 | where TimeGenerated > ago(ReportPeriod)
 | where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
 | where UserType == "Regular"
-| summarize R_Total = count() by UserId, Operation
-| sort by UserId asc, Operation asc, R_Total desc;
+| summarize R_Total = count() by UserPrincipalName = UserId, Operation
+| sort by UserPrincipalName asc, Operation asc, R_Total desc;
 let CompletedResults = HistoricData
-| join kind=inner RecentData on UserId, Operation
+| join kind=inner RecentData on UserPrincipalName, Operation
 | extend BaselineCount = H_DailyCount
 | extend CurrentCount = R_Total
 | extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)
-| project UserId, Operation, BaselineCount, CurrentCount, ChangeRatio 
-| order by UserId asc, Operation asc;
+| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio 
+| order by UserPrincipalName asc, Operation asc;
+let UserList = SigninLogs
+| where TimeGenerated > ago(BaselinePreiod)
+| where UserType == "Member" and ResultType == 0
+| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName
+| sort by UserPrincipalName asc;
 CompletedResults
+| join kind=leftouter UserList on UserPrincipalName
 | where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold
+| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCount, CurrentCount, ChangeRatio
