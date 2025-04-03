@@ -1,5 +1,6 @@
 let BaselinePreiod = 14d;
 let ReportPeriod = 1d;
+let BinPeriod = ReportPeriod;
 let ChangeThreshold = 100;
 let BaselineCountThreshold = 7;
 let CurrentCountThreshold = 150;
@@ -33,7 +34,7 @@ let HistoricData = OfficeActivity
 | where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))
 | where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
 | where UserType == "Regular"
-| summarize H_Total = count() by bin(TimeGenerated, 1d), UserId, Operation
+| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation
 | summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation
 | sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;
 let RecentData = OfficeActivity
