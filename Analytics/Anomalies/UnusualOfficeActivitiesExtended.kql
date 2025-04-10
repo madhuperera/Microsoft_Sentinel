@@ -1,9 +1,6 @@
 let BaselinePreiod = 14d;
 let ReportPeriod = 1d;
 let BinPeriod = ReportPeriod;
-let ChangeThreshold = 100;
-let BaselineCountThreshold = 7;
-let CurrentCountThreshold = 150;
 let UnmonitoredUserIds = dynamic(["SHAREPOINT\\system"]);
 let MonitoredOperations = dynamic([
     "AddedToSecureLink",
@@ -32,11 +29,29 @@ let MonitoredOperations = dynamic([
     ]);
 let OperationThresholds = datatable(Operation: string, BaselineCountThreshold: int, CurrentCountThreshold: int, ChangeThreshold: int)
 [
-    "AddedToSecureLink", 5, 100, 50,
-    "FileDeleted", 10, 200, 75,
-    "FileDownloaded", 15, 300, 100,
-    "TeamDeleted", 3, 50, 25,
-    "UpdateInboxRules", 7, 150, 100
+    "AddedToSecureLink", 0, 5, 100,
+    "AddedToSharingLink", 0, 5, 100,
+    "ChannelDeleted", 0, 1, 100,
+    "CompanyLinkCreated", 0, 5, 100,
+    "ConnectorAdded", 0, 1, 100,
+    "FileDeleted", 10, 100, 100,
+    "FileDeletedFirstStageRecycleBin", 7, 100, 100,
+    "FileDownloaded", 10, 100, 100,
+    "FileSyncDownloadedFull", 10, 100, 100,
+    "FolderDeleted", 7, 100, 100,
+    "FolderDeletedFirstStageRecycleBin", 7, 100, 100,
+    "HardDelete", 10, 100, 100,
+    "ListDeleted", 0, 0, 100,
+    "ListItemDeleted", 5, 10, 100,
+    "MemberRemoved", 0, 0, 100,
+    "New-InboxRule", 0, 0, 100,
+    "SecureLinkCreated", 0, 5, 100,
+    "SendAs", 5, 20, 100,
+    "SharingLinkCreated", 0, 5, 100,
+    "SharingLinkUpdated", 0, 1, 100,
+    "SiteDeleted", 0, 0, 100,
+    "TeamDeleted", 0, 0, 100,
+    "UpdateInboxRules", 0, 1, 100
 ];
 let HistoricData = OfficeActivity
 | where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))
@@ -65,5 +80,8 @@ let UserList = SigninLogs
 | sort by UserPrincipalName asc;
 CompletedResults
 | join kind=leftouter UserList on UserPrincipalName
-| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold
-| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCount, CurrentCount, ChangeRatio
+| join kind=fullouter OperationThresholds on Operation
+//| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold
+| where (BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold) or (ChangeRatio > ChangeThreshold)
+| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCountThreshold, BaselineCount, CurrentCountThreshold, CurrentCount, ChangeThreshold, ChangeRatio
+| order by UserDisplayName asc, Operation asc
