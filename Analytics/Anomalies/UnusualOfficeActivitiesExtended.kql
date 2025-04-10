@@ -1,0 +1,69 @@
+let BaselinePreiod = 14d;
+let ReportPeriod = 1d;
+let BinPeriod = ReportPeriod;
+let ChangeThreshold = 100;
+let BaselineCountThreshold = 7;
+let CurrentCountThreshold = 150;
+let UnmonitoredUserIds = dynamic(["SHAREPOINT\\system"]);
+let MonitoredOperations = dynamic([
+    "AddedToSecureLink",
+    "AddedToSharingLink",
+    "ChannelDeleted",
+    "CompanyLinkCreated",
+    "ConnectorAdded",
+    "FileDeleted",
+    "FileDeletedFirstStageRecycleBin",
+    "FileDownloaded",
+    "FileSyncDownloadedFull",
+    "FolderDeleted",
+    "FolderDeletedFirstStageRecycleBin",
+    "HardDelete",
+    "ListDeleted",
+    "ListItemDeleted",
+    "MemberRemoved",
+    "New-InboxRule",
+    "SecureLinkCreated",
+    "SendAs",
+    "SharingLinkCreated",
+    "SharingLinkUpdated",
+    "SiteDeleted",
+    "TeamDeleted",
+    "UpdateInboxRules"
+    ]);
+let OperationThresholds = datatable(Operation: string, BaselineCountThreshold: int, CurrentCountThreshold: int, ChangeThreshold: int)
+[
+    "AddedToSecureLink", 5, 100, 50,
+    "FileDeleted", 10, 200, 75,
+    "FileDownloaded", 15, 300, 100,
+    "TeamDeleted", 3, 50, 25,
+    "UpdateInboxRules", 7, 150, 100
+];
+let HistoricData = OfficeActivity
+| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))
+| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
+| where UserType == "Regular"
+| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation
+| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation
+| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;
+let RecentData = OfficeActivity
+| where TimeGenerated > ago(ReportPeriod)
+| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)
+| where UserType == "Regular"
+| summarize R_Total = count() by UserPrincipalName = UserId, Operation
+| sort by UserPrincipalName asc, Operation asc, R_Total desc;
+let CompletedResults = HistoricData
+| join kind=inner RecentData on UserPrincipalName, Operation
+| extend BaselineCount = H_DailyCount
+| extend CurrentCount = R_Total
+| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)
+| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio 
+| order by UserPrincipalName asc, Operation asc;
+let UserList = SigninLogs
+| where TimeGenerated > ago(BaselinePreiod)
+| where UserType == "Member" and ResultType == 0
+| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName
+| sort by UserPrincipalName asc;
+CompletedResults
+| join kind=leftouter UserList on UserPrincipalName
+| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold
+| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCount, CurrentCount, ChangeRatio
