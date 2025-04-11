@@ -82,6 +82,6 @@ CompletedResults
 | join kind=leftouter UserList on UserPrincipalName
 | join kind=fullouter OperationThresholds on Operation
 //| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold
-| where (BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold) or (ChangeRatio > ChangeThreshold)
+| where (BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold and CurrentCount > BaselineCount) or (ChangeRatio > ChangeThreshold)
 | project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCountThreshold, BaselineCount, CurrentCountThreshold, CurrentCount, ChangeThreshold, ChangeRatio
 | order by UserDisplayName asc, Operation asc
