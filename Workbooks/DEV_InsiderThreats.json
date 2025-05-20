@@ -1,0 +1,1045 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "loadType": "always",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Sensitive Operation Spike Detected – Anomalous User Behavior\n---\n\nThis workbook visualizes anomalies in sensitive Microsoft 365 operations by comparing each user’s recent activity against their historical baseline. It highlights users whose operation counts significantly exceed normal behavior, helping identify potential risks such as compromised accounts, insider threats, or abnormal automation activity. Use this view to investigate spikes in actions like file deletions, permission changes, or rule modifications.\n\nThis chart highlights users with a spike in sensitive Microsoft 365 operations.\nIt compares activity over the last 1 day (ReportPeriod) against a 14-day baseline (BaselinePeriod).\nUsers are shown if:\n- Activity increased by more than 100% (ChangeThreshold)\n- Baseline average was at least 7 actions (BaselineCountThreshold)\n- Recent activity exceeds 10 actions (CurrentCountThreshold)\n\nThe stacked columns show both baseline and current counts for easy comparison."
+            },
+            "customWidth": "50",
+            "name": "text - 2",
+            "styleSettings": {
+              "maxWidth": "50"
+            }
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "| **Activity**                  | **What It Means**                                                                 |\r\n|------------------------------|------------------------------------------------------------------------------------|\r\n| AddedToSecureLink            | A user was added to a secure sharing link, granting them access to sensitive content. |\r\n| AddedToSharingLink           | A user was added to a general file or folder sharing link.                        |\r\n| ChannelDeleted               | A Microsoft Teams channel was deleted, possibly removing conversations and files. |\r\n| CompanyLinkCreated           | A link was created allowing anyone in the organization to access shared content.  |\r\n| ConnectorAdded               | A new connector was added, potentially affecting how data flows in or out.        |\r\n| FileDeleted                  | A file was deleted by a user.                                                     |\r\n| FileDeletedFirstStageRecycleBin | A file was removed from the recycle bin — a step toward permanent deletion.     |\r\n| FileDownloaded               | A file was downloaded, which could indicate data access or exfiltration.          |\r\n| FileSyncDownloadedFull       | A file was fully downloaded via a sync client like OneDrive.                      |\r\n| FolderDeleted                | A folder (potentially with many files) was deleted.                               |\r\n| FolderDeletedFirstStageRecycleBin | A folder was removed from the recycle bin.                                   |\r\n| HardDelete                   | A file or item was permanently deleted with no recovery option.                   |\r\n| ListDeleted                  | A SharePoint or Microsoft 365 list was deleted.                                   |\r\n| ListItemDeleted              | An item within a SharePoint list was deleted.                                     |\r\n| MemberRemoved                | A user was removed from a group, team, or shared resource.                        |\r\n| New-InboxRule                | A new mailbox rule was created, potentially to redirect or auto-process emails.   |\r\n| SecureLinkCreated            | A secure external sharing link was created for sensitive content.                 |\r\n| SendAs                       | An email was sent as another user — could indicate impersonation.                 |\r\n| SharingLinkCreated           | A new sharing link was created to give others access to content.                  |\r\n| SharingLinkUpdated           | An existing sharing link was modified, possibly changing access permissions.      |\r\n| SiteDeleted                  | A SharePoint site was deleted, potentially removing key content.                  |\r\n| TeamDeleted                  | A Microsoft Team was deleted, removing files, conversations, and settings.        |\r\n| UpdateInboxRules             | Existing mailbox rules were modified, possibly to hide or redirect emails.        |\r\n"
+            },
+            "customWidth": "50",
+            "name": "text - 4",
+            "styleSettings": {
+              "maxWidth": "50"
+            }
+          }
+        ]
+      },
+      "name": "group - 6",
+      "styleSettings": {
+        "margin": "5",
+        "padding": "5",
+        "showBorder": true
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "loadType": "always",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let BaselinePreiod = 14d;\nlet ReportPeriod = 1d;\nlet BinPeriod = ReportPeriod;\nlet ChangeThreshold = 100;\nlet BaselineCountThreshold = 7;\nlet CurrentCountThreshold = 10;\nlet UnmonitoredUserIds = dynamic([\"SHAREPOINT\\\\system\"]);\nlet MonitoredOperations = dynamic([\n    \"AddedToSecureLink\",\n    \"AddedToSharingLink\",\n    \"ChannelDeleted\",\n    \"CompanyLinkCreated\",\n    \"ConnectorAdded\",\n    \"FileDeleted\",\n    \"FileDeletedFirstStageRecycleBin\",\n    \"FileDownloaded\",\n    \"FileSyncDownloadedFull\",\n    \"FolderDeleted\",\n    \"FolderDeletedFirstStageRecycleBin\",\n    \"HardDelete\",\n    \"ListDeleted\",\n    \"ListItemDeleted\",\n    \"MemberRemoved\",\n    \"New-InboxRule\",\n    \"SecureLinkCreated\",\n    \"SendAs\",\n    \"SharingLinkCreated\",\n    \"SharingLinkUpdated\",\n    \"SiteDeleted\",\n    \"TeamDeleted\",\n    \"UpdateInboxRules\"\n    ]);\nlet HistoricData = OfficeActivity\n| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\n| where UserType == \"Regular\"\n| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation\n| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation\n| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;\nlet RecentData = OfficeActivity\n| where TimeGenerated > ago(ReportPeriod)\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\n| where UserType == \"Regular\"\n| summarize R_Total = count() by UserPrincipalName = UserId, Operation\n| sort by UserPrincipalName asc, Operation asc, R_Total desc;\nlet CompletedResults = HistoricData\n| join kind=inner RecentData on UserPrincipalName, Operation\n| extend BaselineCount = H_DailyCount\n| extend CurrentCount = R_Total\n| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)\n| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio \n| order by UserPrincipalName asc, Operation asc;\nlet UserList = SigninLogs\n| where TimeGenerated > ago(BaselinePreiod)\n| where UserType == \"Member\" and ResultType == 0\n| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName\n| sort by UserPrincipalName asc;\nCompletedResults\n| join kind=leftouter UserList on UserPrincipalName\n| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold\n| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCount, CurrentCount, ChangeRatio\n| render columnchart",
+              "size": 1,
+              "title": "Baseline vs Current",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "chartSettings": {
+                "xAxis": "UserDisplayName",
+                "yAxis": [
+                  "BaselineCount",
+                  "CurrentCount"
+                ],
+                "showLegend": true,
+                "xSettings": {
+                  "label": "Staff Member"
+                },
+                "ySettings": {
+                  "label": "Operation Counts"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "maxWidth": "50",
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let BaselinePreiod = 14d;\nlet ReportPeriod = 1d;\nlet BinPeriod = ReportPeriod;\nlet ChangeThreshold = 100;\nlet BaselineCountThreshold = 7;\nlet CurrentCountThreshold = 10;\nlet UnmonitoredUserIds = dynamic([\"SHAREPOINT\\\\system\"]);\nlet MonitoredOperations = dynamic([\n    \"AddedToSecureLink\",\n    \"AddedToSharingLink\",\n    \"ChannelDeleted\",\n    \"CompanyLinkCreated\",\n    \"ConnectorAdded\",\n    \"FileDeleted\",\n    \"FileDeletedFirstStageRecycleBin\",\n    \"FileDownloaded\",\n    \"FileSyncDownloadedFull\",\n    \"FolderDeleted\",\n    \"FolderDeletedFirstStageRecycleBin\",\n    \"HardDelete\",\n    \"ListDeleted\",\n    \"ListItemDeleted\",\n    \"MemberRemoved\",\n    \"New-InboxRule\",\n    \"SecureLinkCreated\",\n    \"SendAs\",\n    \"SharingLinkCreated\",\n    \"SharingLinkUpdated\",\n    \"SiteDeleted\",\n    \"TeamDeleted\",\n    \"UpdateInboxRules\"\n    ]);\nlet HistoricData = OfficeActivity\n| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\n| where UserType == \"Regular\"\n| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation\n| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation\n| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;\nlet RecentData = OfficeActivity\n| where TimeGenerated > ago(ReportPeriod)\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\n| where UserType == \"Regular\"\n| summarize R_Total = count() by UserPrincipalName = UserId, Operation\n| sort by UserPrincipalName asc, Operation asc, R_Total desc;\nlet CompletedResults = HistoricData\n| join kind=inner RecentData on UserPrincipalName, Operation\n| extend BaselineCount = H_DailyCount\n| extend CurrentCount = R_Total\n| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)\n| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio \n| order by UserPrincipalName asc, Operation asc;\nlet UserList = SigninLogs\n| where TimeGenerated > ago(BaselinePreiod)\n| where UserType == \"Member\" and ResultType == 0\n| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName\n| sort by UserPrincipalName asc;\nCompletedResults\n| join kind=leftouter UserList on UserPrincipalName\n| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold\n| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCount, CurrentCount, ChangeRatio\n| render columnchart",
+              "size": 1,
+              "title": "Change Ratio",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "chartSettings": {
+                "xAxis": "UserDisplayName",
+                "yAxis": [
+                  "ChangeRatio"
+                ],
+                "showLegend": true,
+                "customThresholdLine": "{ChangeThreshold}",
+                "customThresholdLineStyle": 3,
+                "xSettings": {
+                  "label": "Staff Member"
+                },
+                "ySettings": {
+                  "label": "Change Ratio"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 2 - Copy",
+            "styleSettings": {
+              "maxWidth": "50",
+              "showBorder": true
+            }
+          }
+        ]
+      },
+      "name": "group - 6",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let BaselinePreiod = 14d;\nlet ReportPeriod = 1d;\nlet BinPeriod = ReportPeriod;\nlet ChangeThreshold = 100;\nlet BaselineCountThreshold = 7;\nlet CurrentCountThreshold = 10;\nlet UnmonitoredUserIds = dynamic([\"SHAREPOINT\\\\system\"]);\nlet MonitoredOperations = dynamic([\n    \"AddedToSecureLink\",\n    \"AddedToSharingLink\",\n    \"ChannelDeleted\",\n    \"CompanyLinkCreated\",\n    \"ConnectorAdded\",\n    \"FileDeleted\",\n    \"FileDeletedFirstStageRecycleBin\",\n    \"FileDownloaded\",\n    \"FileSyncDownloadedFull\",\n    \"FolderDeleted\",\n    \"FolderDeletedFirstStageRecycleBin\",\n    \"HardDelete\",\n    \"ListDeleted\",\n    \"ListItemDeleted\",\n    \"MemberRemoved\",\n    \"New-InboxRule\",\n    \"SecureLinkCreated\",\n    \"SendAs\",\n    \"SharingLinkCreated\",\n    \"SharingLinkUpdated\",\n    \"SiteDeleted\",\n    \"TeamDeleted\",\n    \"UpdateInboxRules\"\n    ]);\nlet HistoricData = OfficeActivity\n| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\n| where UserType == \"Regular\"\n| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation\n| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation\n| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;\nlet RecentData = OfficeActivity\n| where TimeGenerated > ago(ReportPeriod)\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\n| where UserType == \"Regular\"\n| summarize R_Total = count() by UserPrincipalName = UserId, Operation\n| sort by UserPrincipalName asc, Operation asc, R_Total desc;\nlet CompletedResults = HistoricData\n| join kind=inner RecentData on UserPrincipalName, Operation\n| extend BaselineCount = H_DailyCount\n| extend CurrentCount = R_Total\n| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)\n| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio \n| order by UserPrincipalName asc, Operation asc;\nlet UserList = SigninLogs\n| where TimeGenerated > ago(BaselinePreiod)\n| where UserType == \"Member\" and ResultType == 0\n| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName\n| sort by UserPrincipalName asc;\nCompletedResults\n| join kind=leftouter UserList on UserPrincipalName\n| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold\n| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCount, CurrentCount, ChangeRatio\n| render table",
+              "size": 1,
+              "title": "Microsoft 365 Sensitive Operation Anomalies",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "UserObjectId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ChangeRatio",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": ">",
+                          "thresholdValue": "100",
+                          "representation": "warning",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "name": "query - 2 - Copy"
+          }
+        ]
+      },
+      "name": "group - 4",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "# Advanced Analytics\r\n\r\n### **Summary**\r\n\r\nThis query identifies unusual activity in Microsoft Office operations by comparing a user's recent activity to their historical activity. It uses predefined thresholds for each type of operation to determine what is considered \"normal\" and flags any activity that exceeds these thresholds. Specifically, it looks for two conditions:\r\n\r\n1. **Sudden Changes**: If the percentage increase in activity (`ChangeRatio`) is greater than the predefined threshold (`ChangeThreshold`), regardless of the baseline or current counts.\r\n2. **High Activity Levels**: If both the historical activity (`BaselineCount`) and recent activity (`CurrentCount`) exceed their respective thresholds (`BaselineCountThreshold` and `CurrentCountThreshold`).\r\n\r\nThe filter condition:\r\n`kusto\r\n| where (BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold) or (ChangeRatio > ChangeThreshold)`\r\n\r\n\r\n---\r\n\r\n### **Thresholds Table**\r\n\r\n| **Operation**                     | **Baseline Count Threshold** | **Current Count Threshold** | **Change Threshold (%)** |\r\n|------------------------------------|------------------------------|-----------------------------|---------------------------|\r\n| AddedToSecureLink                 | 0                            | 5                           | 100                       |\r\n| AddedToSharingLink                | 0                            | 5                           | 100                       |\r\n| ChannelDeleted                    | 0                            | 1                           | 100                       |\r\n| CompanyLinkCreated                | 0                            | 5                           | 100                       |\r\n| ConnectorAdded                    | 0                            | 1                           | 100                       |\r\n| FileDeleted                       | 10                           | 100                         | 100                       |\r\n| FileDeletedFirstStageRecycleBin   | 7                            | 100                         | 100                       |\r\n| FileDownloaded                    | 10                           | 100                         | 100                       |\r\n| FileSyncDownloadedFull            | 10                           | 100                         | 100                       |\r\n| FolderDeleted                     | 7                            | 100                         | 100                       |\r\n| FolderDeletedFirstStageRecycleBin | 7                            | 100                         | 100                       |\r\n| HardDelete                        | 10                           | 100                         | 100                       |\r\n| ListDeleted                       | 0                            | 0                           | 100                       |\r\n| ListItemDeleted                   | 5                            | 10                          | 100                       |\r\n| MemberRemoved                     | 0                            | 0                           | 100                       |\r\n| New-InboxRule                     | 0                            | 0                           | 100                       |\r\n| SecureLinkCreated                 | 0                            | 5                           | 100                       |\r\n| SendAs                            | 5                            | 20                          | 100                       |\r\n| SharingLinkCreated                | 0                            | 5                           | 100                       |\r\n| SharingLinkUpdated                | 0                            | 1                           | 100                       |\r\n| SiteDeleted                       | 0                            | 0                           | 100                       |\r\n| TeamDeleted                       | 0                            | 0                           | 100                       |\r\n| UpdateInboxRules                  | 0                            | 1                           | 100                       |\r\n\r\nThis table is dynamically used in the query to filter anomalies based on operation-specific thresholds."
+            },
+            "name": "text - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let BaselinePreiod = 14d;\r\nlet ReportPeriod = 1d;\r\nlet BinPeriod = ReportPeriod;\r\nlet UnmonitoredUserIds = dynamic([\"SHAREPOINT\\\\system\"]);\r\nlet MonitoredOperations = dynamic([\r\n    \"AddedToSecureLink\",\r\n    \"AddedToSharingLink\",\r\n    \"ChannelDeleted\",\r\n    \"CompanyLinkCreated\",\r\n    \"ConnectorAdded\",\r\n    \"FileDeleted\",\r\n    \"FileDeletedFirstStageRecycleBin\",\r\n    \"FileDownloaded\",\r\n    \"FileSyncDownloadedFull\",\r\n    \"FolderDeleted\",\r\n    \"FolderDeletedFirstStageRecycleBin\",\r\n    \"HardDelete\",\r\n    \"ListDeleted\",\r\n    \"ListItemDeleted\",\r\n    \"MemberRemoved\",\r\n    \"New-InboxRule\",\r\n    \"SecureLinkCreated\",\r\n    \"SendAs\",\r\n    \"SharingLinkCreated\",\r\n    \"SharingLinkUpdated\",\r\n    \"SiteDeleted\",\r\n    \"TeamDeleted\",\r\n    \"UpdateInboxRules\"\r\n    ]);\r\nlet OperationThresholds = datatable(Operation: string, BaselineCountThreshold: int, CurrentCountThreshold: int, ChangeThreshold: int)\r\n[\r\n    \"AddedToSecureLink\", 0, 5, 100,\r\n    \"AddedToSharingLink\", 0, 5, 100,\r\n    \"ChannelDeleted\", 0, 1, 100,\r\n    \"CompanyLinkCreated\", 0, 5, 100,\r\n    \"ConnectorAdded\", 0, 1, 100,\r\n    \"FileDeleted\", 10, 100, 100,\r\n    \"FileDeletedFirstStageRecycleBin\", 7, 100, 100,\r\n    \"FileDownloaded\", 10, 100, 100,\r\n    \"FileSyncDownloadedFull\", 10, 100, 100,\r\n    \"FolderDeleted\", 7, 100, 100,\r\n    \"FolderDeletedFirstStageRecycleBin\", 7, 100, 100,\r\n    \"HardDelete\", 10, 100, 100,\r\n    \"ListDeleted\", 0, 0, 100,\r\n    \"ListItemDeleted\", 5, 10, 100,\r\n    \"MemberRemoved\", 0, 0, 100,\r\n    \"New-InboxRule\", 0, 0, 100,\r\n    \"SecureLinkCreated\", 0, 5, 100,\r\n    \"SendAs\", 5, 20, 100,\r\n    \"SharingLinkCreated\", 0, 5, 100,\r\n    \"SharingLinkUpdated\", 0, 1, 100,\r\n    \"SiteDeleted\", 0, 0, 100,\r\n    \"TeamDeleted\", 0, 0, 100,\r\n    \"UpdateInboxRules\", 0, 1, 100\r\n];\r\nlet HistoricData = OfficeActivity\r\n| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))\r\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\r\n| where UserType == \"Regular\"\r\n| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation\r\n| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation\r\n| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;\r\nlet RecentData = OfficeActivity\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\r\n| where UserType == \"Regular\"\r\n| summarize R_Total = count() by UserPrincipalName = UserId, Operation\r\n| sort by UserPrincipalName asc, Operation asc, R_Total desc;\r\nlet CompletedResults = HistoricData\r\n| join kind=inner RecentData on UserPrincipalName, Operation\r\n| extend BaselineCount = H_DailyCount\r\n| extend CurrentCount = R_Total\r\n| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)\r\n| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio \r\n| order by UserPrincipalName asc, Operation asc;\r\nlet UserList = SigninLogs\r\n| where TimeGenerated > ago(BaselinePreiod)\r\n| where UserType == \"Member\" and ResultType == 0\r\n| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName\r\n| sort by UserPrincipalName asc;\r\nCompletedResults\r\n| join kind=leftouter UserList on UserPrincipalName\r\n| join kind=fullouter OperationThresholds on Operation\r\n//| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold\r\n| where (BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold and CurrentCount > BaselineCount) or (ChangeRatio > ChangeThreshold)\r\n| project UserDisplayName, UserPrincipalName, UserObjectId, Operation, BaselineCountThreshold, BaselineCount, CurrentCountThreshold, CurrentCount, ChangeThreshold, ChangeRatio\r\n| order by UserDisplayName asc, Operation asc",
+              "size": 3,
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "UserDisplayName",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "UserObjectId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Operation",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "CurrentCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "CurrentCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "ChangeThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ChangeRatio",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": ">",
+                          "thresholdValue": "100",
+                          "representation": "2",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "hierarchySettings": {
+                  "treeType": 1,
+                  "groupBy": [
+                    "Operation"
+                  ],
+                  "expandTopLevel": true,
+                  "finalBy": "UserDisplayName"
+                },
+                "labelSettings": [
+                  {
+                    "columnId": "UserDisplayName",
+                    "label": "User Account"
+                  },
+                  {
+                    "columnId": "UserPrincipalName",
+                    "label": "Username"
+                  },
+                  {
+                    "columnId": "Operation",
+                    "label": "Activity"
+                  },
+                  {
+                    "columnId": "BaselineCountThreshold",
+                    "label": "Baseline Count [Threshold]"
+                  },
+                  {
+                    "columnId": "BaselineCount",
+                    "label": "Baseline Count"
+                  },
+                  {
+                    "columnId": "CurrentCountThreshold",
+                    "label": "Current Count [Threshold]"
+                  },
+                  {
+                    "columnId": "CurrentCount",
+                    "label": "Current Count"
+                  },
+                  {
+                    "columnId": "ChangeThreshold",
+                    "label": "Change [Threshold]"
+                  },
+                  {
+                    "columnId": "ChangeRatio",
+                    "label": "Change Ratio"
+                  }
+                ]
+              }
+            },
+            "name": "query - 1"
+          }
+        ]
+      },
+      "name": "group - 4",
+      "styleSettings": {
+        "margin": "1",
+        "padding": "1",
+        "showBorder": true
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Detailed Activity Report\r\n\r\nThis section of the workbook lets you slice Sentinel data with three interactive controls: **Period**, **Staff Account**, and **Activity Type**.  \r\nChange any of them and every chart, grid, or metric in the report refreshes instantly.\r\n\r\n| Filter | Purpose | Values & behaviour |\r\n|--------|---------|--------------------|\r\n| **Period** | Limits results to a rolling time-window (`ago({ReportPeriod})`). | *Last 24 hours* (default) • *Last 7 days* • *Last 14 days* |\r\n| **Staff Account** | Shows activity generated by a single user. The list is auto-populated from recent logs, so only active UPNs appear. | Dynamic dropdown of user principal names. Leave blank to include **all** accounts. |\r\n| **Activity** | Filters on the operation recorded in the **OfficeActivity** table. | Dropdown fed by distinct `Operation` values detected during the chosen period. |\r\n\r\n### Activity-Type support matrix\r\n\r\nThe dropdown lists **every** operation that occurred, but the workbook’s visuals are **optimised for two operations** right now: **FileDownloaded** and **FileSyncDownloadedFull**\r\n\r\nSelecting any other operation (e.g., *ListItemDeleted*, *ListDeleted*) will still run and display raw rows, **but table columns are not tailored for those activities yet**.\r\n\r\n> **Tip:** Stick to **FileDownloaded** or **FileSyncDownloadedFull** to see the full, formatted report.  \r\n> Additional activity types can be added in future workbook iterations as needed.\r\n\r\n### Filter behaviour\r\n\r\n* **Period** is always applied.  \r\n* **Staff Account** and **Activity** are optional—leave either blank to include everything.  \r\n\r\nIf no data appears, try widening the **Period** or clearing one of the optional filters.\r\n"
+            },
+            "name": "text - 0"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "1fe7092b-a3f1-487d-8580-e6018860917c",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "UserPrincipalName",
+                  "label": "Staff Account",
+                  "type": 2,
+                  "query": "let BaselinePreiod = 14d;\r\nlet ReportPeriod = 1d;\r\nlet BinPeriod = ReportPeriod;\r\nlet UnmonitoredUserIds = dynamic([\"SHAREPOINT\\\\system\"]);\r\nlet MonitoredOperations = dynamic([\r\n    \"AddedToSecureLink\",\r\n    \"AddedToSharingLink\",\r\n    \"ChannelDeleted\",\r\n    \"CompanyLinkCreated\",\r\n    \"ConnectorAdded\",\r\n    \"FileDeleted\",\r\n    \"FileDeletedFirstStageRecycleBin\",\r\n    \"FileDownloaded\",\r\n    \"FileSyncDownloadedFull\",\r\n    \"FolderDeleted\",\r\n    \"FolderDeletedFirstStageRecycleBin\",\r\n    \"HardDelete\",\r\n    \"ListDeleted\",\r\n    \"ListItemDeleted\",\r\n    \"MemberRemoved\",\r\n    \"New-InboxRule\",\r\n    \"SecureLinkCreated\",\r\n    \"SendAs\",\r\n    \"SharingLinkCreated\",\r\n    \"SharingLinkUpdated\",\r\n    \"SiteDeleted\",\r\n    \"TeamDeleted\",\r\n    \"UpdateInboxRules\"\r\n    ]);\r\nlet OperationThresholds = datatable(Operation: string, BaselineCountThreshold: int, CurrentCountThreshold: int, ChangeThreshold: int)\r\n[\r\n    \"AddedToSecureLink\", 0, 5, 100,\r\n    \"AddedToSharingLink\", 0, 5, 100,\r\n    \"ChannelDeleted\", 0, 1, 100,\r\n    \"CompanyLinkCreated\", 0, 5, 100,\r\n    \"ConnectorAdded\", 0, 1, 100,\r\n    \"FileDeleted\", 10, 100, 100,\r\n    \"FileDeletedFirstStageRecycleBin\", 7, 100, 100,\r\n    \"FileDownloaded\", 10, 100, 100,\r\n    \"FileSyncDownloadedFull\", 10, 100, 100,\r\n    \"FolderDeleted\", 7, 100, 100,\r\n    \"FolderDeletedFirstStageRecycleBin\", 7, 100, 100,\r\n    \"HardDelete\", 10, 100, 100,\r\n    \"ListDeleted\", 0, 0, 100,\r\n    \"ListItemDeleted\", 5, 10, 100,\r\n    \"MemberRemoved\", 0, 0, 100,\r\n    \"New-InboxRule\", 0, 0, 100,\r\n    \"SecureLinkCreated\", 0, 5, 100,\r\n    \"SendAs\", 5, 20, 100,\r\n    \"SharingLinkCreated\", 0, 5, 100,\r\n    \"SharingLinkUpdated\", 0, 1, 100,\r\n    \"SiteDeleted\", 0, 0, 100,\r\n    \"TeamDeleted\", 0, 0, 100,\r\n    \"UpdateInboxRules\", 0, 1, 100\r\n];\r\nlet HistoricData = OfficeActivity\r\n| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))\r\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\r\n| where UserType == \"Regular\"\r\n| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation\r\n| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation\r\n| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;\r\nlet RecentData = OfficeActivity\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\r\n| where UserType == \"Regular\"\r\n| summarize R_Total = count() by UserPrincipalName = UserId, Operation\r\n| sort by UserPrincipalName asc, Operation asc, R_Total desc;\r\nlet CompletedResults = HistoricData\r\n| join kind=inner RecentData on UserPrincipalName, Operation\r\n| extend BaselineCount = H_DailyCount\r\n| extend CurrentCount = R_Total\r\n| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)\r\n| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio \r\n| order by UserPrincipalName asc, Operation asc;\r\nlet UserList = SigninLogs\r\n| where TimeGenerated > ago(BaselinePreiod)\r\n| where UserType == \"Member\" and ResultType == 0\r\n| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName\r\n| sort by UserPrincipalName asc;\r\nCompletedResults\r\n| join kind=leftouter UserList on UserPrincipalName\r\n| join kind=fullouter OperationThresholds on Operation\r\n//| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold\r\n| where (BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold and CurrentCount > BaselineCount) or (ChangeRatio > ChangeThreshold)\r\n| project UserDisplayName, UserPrincipalName, UserObjectId, Operation\r\n| distinct UserPrincipalName\r\n| sort by UserPrincipalName asc",
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces",
+                  "value": "dkubisek@integracare.com"
+                },
+                {
+                  "id": "fa370031-8e14-416b-82b7-8d95d40287d9",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Operation",
+                  "label": "Activity",
+                  "type": 2,
+                  "query": "let BaselinePreiod = 14d;\r\nlet ReportPeriod = 1d;\r\nlet BinPeriod = ReportPeriod;\r\nlet UnmonitoredUserIds = dynamic([\"SHAREPOINT\\\\system\"]);\r\nlet MonitoredOperations = dynamic([\r\n    \"AddedToSecureLink\",\r\n    \"AddedToSharingLink\",\r\n    \"ChannelDeleted\",\r\n    \"CompanyLinkCreated\",\r\n    \"ConnectorAdded\",\r\n    \"FileDeleted\",\r\n    \"FileDeletedFirstStageRecycleBin\",\r\n    \"FileDownloaded\",\r\n    \"FileSyncDownloadedFull\",\r\n    \"FolderDeleted\",\r\n    \"FolderDeletedFirstStageRecycleBin\",\r\n    \"HardDelete\",\r\n    \"ListDeleted\",\r\n    \"ListItemDeleted\",\r\n    \"MemberRemoved\",\r\n    \"New-InboxRule\",\r\n    \"SecureLinkCreated\",\r\n    \"SendAs\",\r\n    \"SharingLinkCreated\",\r\n    \"SharingLinkUpdated\",\r\n    \"SiteDeleted\",\r\n    \"TeamDeleted\",\r\n    \"UpdateInboxRules\"\r\n    ]);\r\nlet OperationThresholds = datatable(Operation: string, BaselineCountThreshold: int, CurrentCountThreshold: int, ChangeThreshold: int)\r\n[\r\n    \"AddedToSecureLink\", 0, 5, 100,\r\n    \"AddedToSharingLink\", 0, 5, 100,\r\n    \"ChannelDeleted\", 0, 1, 100,\r\n    \"CompanyLinkCreated\", 0, 5, 100,\r\n    \"ConnectorAdded\", 0, 1, 100,\r\n    \"FileDeleted\", 10, 100, 100,\r\n    \"FileDeletedFirstStageRecycleBin\", 7, 100, 100,\r\n    \"FileDownloaded\", 10, 100, 100,\r\n    \"FileSyncDownloadedFull\", 10, 100, 100,\r\n    \"FolderDeleted\", 7, 100, 100,\r\n    \"FolderDeletedFirstStageRecycleBin\", 7, 100, 100,\r\n    \"HardDelete\", 10, 100, 100,\r\n    \"ListDeleted\", 0, 0, 100,\r\n    \"ListItemDeleted\", 5, 10, 100,\r\n    \"MemberRemoved\", 0, 0, 100,\r\n    \"New-InboxRule\", 0, 0, 100,\r\n    \"SecureLinkCreated\", 0, 5, 100,\r\n    \"SendAs\", 5, 20, 100,\r\n    \"SharingLinkCreated\", 0, 5, 100,\r\n    \"SharingLinkUpdated\", 0, 1, 100,\r\n    \"SiteDeleted\", 0, 0, 100,\r\n    \"TeamDeleted\", 0, 0, 100,\r\n    \"UpdateInboxRules\", 0, 1, 100\r\n];\r\nlet HistoricData = OfficeActivity\r\n| where TimeGenerated between (ago(BaselinePreiod) .. ago(ReportPeriod))\r\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\r\n| where UserType == \"Regular\"\r\n| summarize H_Total = count() by bin(TimeGenerated, BinPeriod), UserId, Operation\r\n| summarize H_DailyCount = toint(avg(H_Total)) by UserPrincipalName = UserId, Operation\r\n| sort by UserPrincipalName asc, Operation asc, H_DailyCount desc;\r\nlet RecentData = OfficeActivity\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Operation in (MonitoredOperations) and UserId !in (UnmonitoredUserIds)\r\n| where UserType == \"Regular\"\r\n| summarize R_Total = count() by UserPrincipalName = UserId, Operation\r\n| sort by UserPrincipalName asc, Operation asc, R_Total desc;\r\nlet CompletedResults = HistoricData\r\n| join kind=inner RecentData on UserPrincipalName, Operation\r\n| extend BaselineCount = H_DailyCount\r\n| extend CurrentCount = R_Total\r\n| extend ChangeRatio = round(((todouble(CurrentCount) - todouble(BaselineCount)) / todouble(BaselineCount)) * 100, 2)\r\n| project UserPrincipalName, Operation, BaselineCount, CurrentCount, ChangeRatio \r\n| order by UserPrincipalName asc, Operation asc;\r\nlet UserList = SigninLogs\r\n| where TimeGenerated > ago(BaselinePreiod)\r\n| where UserType == \"Member\" and ResultType == 0\r\n| distinct UserObjectId = UserId, UserDisplayName, UserPrincipalName\r\n| sort by UserPrincipalName asc;\r\nCompletedResults\r\n| join kind=leftouter UserList on UserPrincipalName\r\n| join kind=fullouter OperationThresholds on Operation\r\n//| where ChangeRatio > ChangeThreshold and BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold\r\n| where (BaselineCount > BaselineCountThreshold and CurrentCount > CurrentCountThreshold and CurrentCount > BaselineCount) or (ChangeRatio > ChangeThreshold)\r\n| project UserDisplayName, UserPrincipalName, UserObjectId, Operation\r\n| distinct Operation\r\n| sort by Operation asc",
+                  "typeSettings": {
+                    "additionalResourceOptions": []
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces",
+                  "value": "FileDownloaded"
+                },
+                {
+                  "id": "a148f998-7206-4dbc-8abf-4bc4577e4112",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Period",
+                  "type": 2,
+                  "typeSettings": {
+                    "additionalResourceOptions": []
+                  },
+                  "jsonData": "[\r\n  { \"value\": \"1d\",  \"label\": \"Last 24 hours\", \"selected\": true },\r\n  { \"value\": \"7d\",  \"label\": \"Last 7 days\"   },\r\n  { \"value\": \"14d\", \"label\": \"Last 14 days\"  }\r\n]\r\n",
+                  "value": "7d"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let UserPrincipalName = '{UserPrincipalName}';\r\nlet MonitoredOperations = '{Operation}';\r\nlet EmailAttachmentSupportedOperations = dynamic([\"FileDownloaded\"]);\r\nlet ReportPeriod = ({Period});\r\nlet UnmonitoredUserIds = dynamic([\"SHAREPOINT\\\\system\"]);\r\nlet MonitoredData = OfficeActivity\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Operation == MonitoredOperations and UserId !in (UnmonitoredUserIds) and UserId == UserPrincipalName\r\n| where UserType == \"Regular\";\r\nlet EmailAttachmentsInSamePeriod = EmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| distinct FileName\r\n| sort by FileName asc;\r\nMonitoredData\r\n| project TimeGenerated, Site_Url, SourceFileName, RecordType, ClientIP, EventSource, Operation\r\n| extend EmailAttachmentDetected =\r\n    iff(Operation !in (EmailAttachmentSupportedOperations),\r\n        \"N/A\",\r\n        iff(SourceFileName in (EmailAttachmentsInSamePeriod),\r\n            \"Yes\",\r\n            \"No\"\r\n        )\r\n    )\r\n| project TimeGenerated, ['SharePoint Site'] = Site_Url, ['File Name'] = SourceFileName, EmailAttachmentDetected, RecordType, ClientIP, EventSource",
+              "size": 0,
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "rowLimit": 500
+              }
+            },
+            "name": "query - 2",
+            "styleSettings": {
+              "showBorder": true
+            }
+          }
+        ]
+      },
+      "name": "group - 5",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "## Email Data Leak Monitoring\r\n\r\nThis section provides visibility into potential data exfiltration risks through email attachments sent from internal users to external recipients. The visualizations in this section are designed to help identify abnormal patterns and high-risk behaviors based on the following criteria:\r\n\r\n- Emails sent from internal domains to external recipients\r\n- File types typically ignored in telemetry (e.g., images) are excluded\r\n- Trends are shown over time to detect spikes in external sharing activity\r\n- Distinctions are made between consumer email providers and other external domains\r\n\r\nThe insights below can help analysts monitor for:\r\n- Repeated sharing of attachments with non-corporate domains\r\n- Sudden increases in email activity to specific recipients\r\n- Potential misuse of email for data exfiltration by insiders\r\n\r\nUse the charts below to drill into specific senders, recipient domains, and attachment behaviors during the observed reporting period.\r\n"
+            },
+            "name": "text - 0"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "affe10fa-602a-4341-9f14-06b55f318f9f",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "Period",
+                  "type": 2,
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "jsonData": "[\r\n  { \"value\": \"7d\",  \"label\": \"Last 7 days\"},\r\n  { \"value\": \"14d\",  \"label\": \"Last 14 days\", \"selected\": true    },\r\n  { \"value\": \"30d\", \"label\": \"Last 30 days\"  },\r\n  { \"value\": \"60d\", \"label\": \"Last 60 days\"  },\r\n  { \"value\": \"90d\", \"label\": \"Last 90 days\"  },\r\n  { \"value\": \"180d\", \"label\": \"Last 180 days\"  }\r\n]",
+                  "timeContext": {
+                    "durationMs": 86400000
+                  }
+                },
+                {
+                  "id": "d2f7825a-c05e-486a-abc7-ab90b0209563",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "EmailVolumeAggregationInterval",
+                  "label": "Email Volume Aggregation Interval",
+                  "type": 2,
+                  "typeSettings": {
+                    "additionalResourceOptions": []
+                  },
+                  "jsonData": "[\r\n  { \"value\": \"1h\",  \"label\": \"1 Hour Intervals\"},\r\n  { \"value\": \"4h\",  \"label\": \"4 Hour Intervals\"   },\r\n  { \"value\": \"8h\", \"label\": \"8 Hour Intervals\"  },\r\n  { \"value\": \"1d\", \"label\": \"1 Day Intervals\", \"selected\": true },\r\n  { \"value\": \"7d\", \"label\": \"7 Day Intervals\"  },\r\n  { \"value\": \"30d\", \"label\": \"30 Day Intervals\"  }\r\n]",
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "value": "1h"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 9"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "**Note:**\r\n- **ReportPeriod** must be **greater than** the value defined in **Email Volume Aggregation Interval** for graphs to display correctly.\r\n"
+            },
+            "name": "text - 10"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where FileType !in (FileTypesToIgnore)\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientDomain\r\n| render linechart kind=unstacked",
+              "size": 3,
+              "title": "External Attachment Volume by Recipient Domain",
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "UserDisplayName",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "UserObjectId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Operation",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "CurrentCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "CurrentCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "ChangeThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ChangeRatio",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": ">",
+                          "thresholdValue": "100",
+                          "representation": "2",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "hierarchySettings": {
+                  "treeType": 1,
+                  "groupBy": [
+                    "Operation"
+                  ],
+                  "expandTopLevel": true,
+                  "finalBy": "UserDisplayName"
+                },
+                "labelSettings": [
+                  {
+                    "columnId": "UserDisplayName",
+                    "label": "User Account"
+                  },
+                  {
+                    "columnId": "UserPrincipalName",
+                    "label": "Username"
+                  },
+                  {
+                    "columnId": "Operation",
+                    "label": "Activity"
+                  },
+                  {
+                    "columnId": "BaselineCountThreshold",
+                    "label": "Baseline Count [Threshold]"
+                  },
+                  {
+                    "columnId": "BaselineCount",
+                    "label": "Baseline Count"
+                  },
+                  {
+                    "columnId": "CurrentCountThreshold",
+                    "label": "Current Count [Threshold]"
+                  },
+                  {
+                    "columnId": "CurrentCount",
+                    "label": "Current Count"
+                  },
+                  {
+                    "columnId": "ChangeThreshold",
+                    "label": "Change [Threshold]"
+                  },
+                  {
+                    "columnId": "ChangeRatio",
+                    "label": "Change Ratio"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "5",
+              "padding": "2",
+              "maxWidth": "50",
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where FileType !in (FileTypesToIgnore)\r\n// Reporting\r\n| summarize count() by bin(TimeGenerated, BinPeriod)\r\n| render linechart kind=unstacked",
+              "size": 3,
+              "title": "Overall External Attachment Trend",
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "UserDisplayName",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "UserObjectId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Operation",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "CurrentCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "CurrentCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "ChangeThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ChangeRatio",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": ">",
+                          "thresholdValue": "100",
+                          "representation": "2",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "hierarchySettings": {
+                  "treeType": 1,
+                  "groupBy": [
+                    "Operation"
+                  ],
+                  "expandTopLevel": true,
+                  "finalBy": "UserDisplayName"
+                },
+                "labelSettings": [
+                  {
+                    "columnId": "UserDisplayName",
+                    "label": "User Account"
+                  },
+                  {
+                    "columnId": "UserPrincipalName",
+                    "label": "Username"
+                  },
+                  {
+                    "columnId": "Operation",
+                    "label": "Activity"
+                  },
+                  {
+                    "columnId": "BaselineCountThreshold",
+                    "label": "Baseline Count [Threshold]"
+                  },
+                  {
+                    "columnId": "BaselineCount",
+                    "label": "Baseline Count"
+                  },
+                  {
+                    "columnId": "CurrentCountThreshold",
+                    "label": "Current Count [Threshold]"
+                  },
+                  {
+                    "columnId": "CurrentCount",
+                    "label": "Current Count"
+                  },
+                  {
+                    "columnId": "ChangeThreshold",
+                    "label": "Change [Threshold]"
+                  },
+                  {
+                    "columnId": "ChangeRatio",
+                    "label": "Change Ratio"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "5",
+              "padding": "2",
+              "maxWidth": "50",
+              "showBorder": true
+            }
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### External Attachment Volume by Recipient Domain\r\n\r\nDisplays the number of emails with attachments sent from internal users to external domains over time, grouped by recipient domain.  \r\nThis helps identify which external domains are receiving the highest volume of internal attachments and when that activity peaks.  \r\nCommon image file types are excluded to focus on potentially sensitive content.\r\n"
+            },
+            "customWidth": "50",
+            "name": "text - 5",
+            "styleSettings": {
+              "maxWidth": "50"
+            }
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### Overall External Attachment Trend\r\n\r\nShows the total count of emails with attachments sent to any external domain from internal users.  \r\n\r\nThe graph is ungrouped and reflects the overall volume trend across time, helping identify bursts of outbound attachment activity that could warrant deeper investigation.\r\n"
+            },
+            "customWidth": "50",
+            "name": "text - 6",
+            "styleSettings": {
+              "maxWidth": "50"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nlet PDOList = externaldata(DomainNames: string,values:dynamic) [@\"https://gist.githubusercontent.com/ammarshah/f5c2624d767f91a7cbdc4e54db8dd0bf/raw/660fd949eba09c0b86574d9d3aa0f2137161fc7c/all_email_provider_domains.txt\"]\r\nwith (format=\"txt\",ignoreFirstRecord=false)\r\n| project DomainNames;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain in~ (PDOList)\r\n| where FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress, SenderFromAddress\r\n| where NumberOfEmails >= MaxEmailCountThreshold\r\n| render linechart kind=unstacked",
+              "size": 3,
+              "title": "Attachments Sent to Personal Email Recipients",
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "UserDisplayName",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "UserObjectId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Operation",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "CurrentCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "CurrentCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "ChangeThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ChangeRatio",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": ">",
+                          "thresholdValue": "100",
+                          "representation": "2",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "hierarchySettings": {
+                  "treeType": 1,
+                  "groupBy": [
+                    "Operation"
+                  ],
+                  "expandTopLevel": true,
+                  "finalBy": "UserDisplayName"
+                },
+                "labelSettings": [
+                  {
+                    "columnId": "UserDisplayName",
+                    "label": "User Account"
+                  },
+                  {
+                    "columnId": "UserPrincipalName",
+                    "label": "Username"
+                  },
+                  {
+                    "columnId": "Operation",
+                    "label": "Activity"
+                  },
+                  {
+                    "columnId": "BaselineCountThreshold",
+                    "label": "Baseline Count [Threshold]"
+                  },
+                  {
+                    "columnId": "BaselineCount",
+                    "label": "Baseline Count"
+                  },
+                  {
+                    "columnId": "CurrentCountThreshold",
+                    "label": "Current Count [Threshold]"
+                  },
+                  {
+                    "columnId": "CurrentCount",
+                    "label": "Current Count"
+                  },
+                  {
+                    "columnId": "ChangeThreshold",
+                    "label": "Change [Threshold]"
+                  },
+                  {
+                    "columnId": "ChangeRatio",
+                    "label": "Change Ratio"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1 - Copy",
+            "styleSettings": {
+              "margin": "5",
+              "padding": "2",
+              "maxWidth": "50",
+              "showBorder": true
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet PDOList = externaldata(DomainNames: string,values:dynamic) [@\"https://gist.githubusercontent.com/ammarshah/f5c2624d767f91a7cbdc4e54db8dd0bf/raw/660fd949eba09c0b86574d9d3aa0f2137161fc7c/all_email_provider_domains.txt\"]\r\nwith (format=\"txt\",ignoreFirstRecord=false)\r\n| project DomainNames;\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain !in~ (PDOList)\r\n| where FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress, SenderFromAddress\r\n| where NumberOfEmails >= MaxEmailCountThreshold\r\n| render linechart kind=unstacked",
+              "size": 3,
+              "title": "Attachments Sent to Business Email Recipients",
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "UserDisplayName",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "UserObjectId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Operation",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "CurrentCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "CurrentCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "ChangeThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ChangeRatio",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": ">",
+                          "thresholdValue": "100",
+                          "representation": "2",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "hierarchySettings": {
+                  "treeType": 1,
+                  "groupBy": [
+                    "Operation"
+                  ],
+                  "expandTopLevel": true,
+                  "finalBy": "UserDisplayName"
+                },
+                "labelSettings": [
+                  {
+                    "columnId": "UserDisplayName",
+                    "label": "User Account"
+                  },
+                  {
+                    "columnId": "UserPrincipalName",
+                    "label": "Username"
+                  },
+                  {
+                    "columnId": "Operation",
+                    "label": "Activity"
+                  },
+                  {
+                    "columnId": "BaselineCountThreshold",
+                    "label": "Baseline Count [Threshold]"
+                  },
+                  {
+                    "columnId": "BaselineCount",
+                    "label": "Baseline Count"
+                  },
+                  {
+                    "columnId": "CurrentCountThreshold",
+                    "label": "Current Count [Threshold]"
+                  },
+                  {
+                    "columnId": "CurrentCount",
+                    "label": "Current Count"
+                  },
+                  {
+                    "columnId": "ChangeThreshold",
+                    "label": "Change [Threshold]"
+                  },
+                  {
+                    "columnId": "ChangeRatio",
+                    "label": "Change Ratio"
+                  }
+                ]
+              },
+              "chartSettings": {
+                "showDataPoints": true
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1 - Copy - Copy",
+            "styleSettings": {
+              "margin": "5",
+              "padding": "2",
+              "maxWidth": "50",
+              "showBorder": true
+            }
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### Attachments Sent to Personal Email Recipients\r\n\r\nMonitors attachment emails sent from internal users to popular public email provider domains (e.g., gmail.com, yahoo.com).  \r\nThis chart is useful for detecting insider activity that involves sending corporate data to personal or untrusted addresses.  \r\nAny spike may indicate risky behavior or potential data exfiltration.\r\n"
+            },
+            "customWidth": "50",
+            "name": "text - 7",
+            "styleSettings": {
+              "maxWidth": "50"
+            }
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### Attachments Sent to Business Email Recipients\r\n\r\nTracks internal emails with attachments sent to business email domains.\r\n\r\nThese could include business partners, vendors, or unlisted/unrecognized third-party domains.  \r\nMonitoring this channel helps spot unsanctioned or unusual external data transfers.\r\n"
+            },
+            "customWidth": "50",
+            "name": "text - 8",
+            "styleSettings": {
+              "maxWidth": "50"
+            }
+          }
+        ]
+      },
+      "name": "group - 4 - Copy",
+      "styleSettings": {
+        "margin": "1",
+        "padding": "1",
+        "showBorder": true
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/dada11e9-ecc2-459b-8377-0f7d48e8aec2/resourcegroups/ic-eastus-prod-security-sentinel-internal-rg/providers/microsoft.operationalinsights/workspaces/ic-sentinel-prod-workspace"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
