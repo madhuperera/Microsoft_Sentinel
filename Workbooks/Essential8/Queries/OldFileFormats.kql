@@ -1,0 +1,16 @@
+let OldOfficeFileExtensions = dynamic([
+    "xls",     // Excel 97-2003 Workbook
+    "xlt",     // Excel 97-2003 Template
+    "xlm",     // Excel 4.0 Macro
+    "xlb",     // Excel Toolbars
+    "doc",     // Word 97-2003 Document
+    "dot"      // Word 97-2003 Template
+]);
+OfficeActivity
+| where TimeGenerated > ago(180d)
+| where OfficeWorkload == "SharePoint"
+| where Operation startswith "File" and isnotempty(SourceFileExtension)
+| where SourceFileExtension in~ (OldOfficeFileExtensions)
+| where SourceRelativeUrl !contains "PreservationHoldLibrary"
+| summarize Count = count() by Site=SourceRelativeUrl, FileType=(SourceFileExtension)
+| sort by Site asc
