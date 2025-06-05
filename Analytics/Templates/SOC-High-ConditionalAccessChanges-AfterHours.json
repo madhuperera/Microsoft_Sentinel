@@ -1,0 +1,72 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/027aece7-98dd-4016-a140-aab327bb8a6b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/027aece7-98dd-4016-a140-aab327bb8a6b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SOC-High-ConditionalAccessChanges-AfterHours",
+                "description": "This rule detects changes made to Entra ID Conditional Access policies outside of standard work hours, when such modifications are uncommon and may indicate unauthorized activity. Conditional Access policies control access to critical resources, and unscheduled changes could pose a security risk. The rule triggers an incident to ensure immediate investigation of potential breaches or misuse of administrative privileges.",
+                "severity": "High",
+                "enabled": true,
+                "query": "let ReportPeriod = 2h;\r\nlet ClientTimeZone = \"Pacific/Auckland\"; //New Zealand Time Zone\r\nlet OfficeOpenHour = 7; // 7AM\r\nlet OfficeCloseHour = 18; // 6 PM\r\nlet OfficeCloseDays = dynamic([\"Saturday\",\"Sunday\"]);\r\nlet ExcludedApps = dynamic([\"Microsoft Authenticator App\"]);\r\nAuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where OperationName has \"conditional access\"\r\n| extend ['Conditional Access Policy Name'] = tostring(TargetResources[0].displayName)\r\n| extend Actor = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| extend LoginHour = hourofday(NZTime)\r\n| extend LoginDay = dayofweek(NZTime)\r\n| extend LoginDay = iff(LoginDay==0d,\"Sunday\",iff(LoginDay==6d,\"Saturday\",iff(LoginDay==5d,\"Friday\",iff(LoginDay==4d,\"Thursday\",iff(LoginDay==3d,\"Wednesday\",iff(LoginDay==2d,\"Tuesday\",iff(LoginDay==1d,\"Monday\",\"Error\")))))))\r\n| where LoginHour <= OfficeOpenHour or LoginHour >= OfficeCloseHour or LoginDay in~ (OfficeCloseDays)\r\n| extend AccountCustomEntity = Actor\r\n| project TimeGenerated, NZTime, OperationName, ['Conditional Access Policy Name'], Actor",
+                "queryFrequency": "PT2H",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1098"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "Actor"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

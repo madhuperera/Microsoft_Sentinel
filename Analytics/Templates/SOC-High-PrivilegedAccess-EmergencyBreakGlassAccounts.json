@@ -1,0 +1,95 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ac529739-c213-4d71-9a74-173584a7a7d9')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ac529739-c213-4d71-9a74-173584a7a7d9')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SOC-High-PrivilegedAccess-EmergencyBreakGlassAccounts",
+                "description": "This analytic rule monitors sign-in activity for Emergency Break Glass accounts and detects potential misuse, unauthorized access, or adversary techniques mapped to MITRE ATT&CK tactics. It cross-references sign-ins from accounts stored in the EmergencyBreakGlass Accounts Watchlist with authentication logs in Microsoft Entra ID (Azure AD).",
+                "severity": "High",
+                "enabled": true,
+                "query": "let ReportPeriod = 1h;\r\nlet ClientTimeZone = \"Pacific/Auckland\"; //New Zealand Time Zone\r\nSigninLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| lookup kind=inner _GetWatchlist(\"EmergencyBreakGlassAccounts\")\r\n    on $left.UserId == $right.SearchKey\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| project TimeGenerated, NZTime, UserPrincipalName, UserDisplayName, ConditionalAccessStatus, IsInteractive, IPAddress, RiskDetail, RiskState, ResourceDisplayName, UserId\r\n| sort by TimeGenerated desc",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence",
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1110"
+                ],
+                "subTechniques": [
+                    "T1078.004"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT8H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ObjectGuid",
+                                "columnName": "UserId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "UserId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
