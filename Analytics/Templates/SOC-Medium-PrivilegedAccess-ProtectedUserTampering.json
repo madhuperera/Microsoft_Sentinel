@@ -1,0 +1,84 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4439cc23-554f-42bb-a627-9ceae5c73d56')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4439cc23-554f-42bb-a627-9ceae5c73d56')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SOC-Medium-PrivilegedAccess-ProtectedUserTampering",
+                "description": "This rule detects and alerts on instances where a user is removed from an Entra ID Administrative Unit. Unauthorized or unexpected removals could indicate potential security incidents, including insider threats, account compromise, or administrative misconfigurations. This rule helps security teams monitor and investigate such changes to prevent unauthorized privilege modifications.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let ReportPeriod = 2.5h;\r\nlet ClientTimeZone = \"Pacific/Auckland\"; //New Zealand Time Zone\r\nAuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Category == \"AdministrativeUnit\" and Result == \"success\"\r\n| where OperationName startswith \"Remove member\"\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| extend RemovedMember = tostring(TargetResources[0].userPrincipalName)\r\n| extend InitiatedBy = tostring(InitiatedBy.user.userPrincipalName)\r\n| project TimeGenerated, NZTime, OperationName, RemovedMember, InitiatedBy\r\n| sort by TimeGenerated desc",
+                "queryFrequency": "PT2H",
+                "queryPeriod": "PT3H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence",
+                    "PrivilegeEscalation",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1098",
+                    "T1484"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT3H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatedBy"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "RemovedMember"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

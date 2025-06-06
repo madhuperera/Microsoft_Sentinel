@@ -1,0 +1,113 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/33e27ba5-bdd6-4abb-a6c7-7637053fc826')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/33e27ba5-bdd6-4abb-a6c7-7637053fc826')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SOC-Low-UnauthorizedAccess-TemporaryAccessPassMonitoingByAdmin",
+                "description": "This rule detects instances where an admin has registered a Temporary Access Pass (TAP) for a user. TAPs are a form of temporary authentication that can be used for passwordless sign-in or onboarding users. While this is a legitimate process, unauthorized or unexpected TAP registrations may indicate potential misuse of privileged accounts or lateral movement attempts.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "let ReportPeriod = 2h;\r\nlet ClientTimeZone = \"Pacific/Auckland\"; // New Zealand Time Zone\r\nAuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where LoggedByService == \"Authentication Methods\"\r\n| where Category == \"UserManagement\" and ActivityDisplayName =~ \"Admin registered security info\" and ResultReason =~ \"Admin registered temporary access pass method for user\"\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| extend InitiatedByUsername = tostring(InitiatedBy.user.userPrincipalName)\r\n| extend TargetUserDisplayName = tostring(TargetResources[0].displayName)\r\n| extend TargetUsername = tostring(TargetResources[0].userPrincipalName)\r\n| extend InitiatedByUserDisplayName = Identity\r\n| extend InitiatedByIP = tostring(InitiatedBy.user.ipAddress)\r\n| project TimeGenerated, NZTime, InitiatedByUserDisplayName, InitiatedByUsername, InitiatedByIP, TargetUserDisplayName, TargetUsername, ResultReason\r\n| order by TimeGenerated desc",
+                "queryFrequency": "PT2H",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "CredentialAccess",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1556"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": true,
+                        "lookbackDuration": "PT8H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatedByUsername"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatedByUserDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "TargetUsername"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "TargetUserDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "InitiatedByIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

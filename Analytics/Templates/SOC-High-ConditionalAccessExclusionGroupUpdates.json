@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ea0e5eec-1fdd-44b7-a4d2-27e96c130dc0')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ea0e5eec-1fdd-44b7-a4d2-27e96c130dc0')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SOC-High-ConditionalAccessExclusionGroupUpdates",
+                "description": "This rule detects when a user is added to a Conditional Access Policy (CAP) Exclusion Group in Microsoft Entra ID. Exclusion groups (groups containing \"-CAP-\" and ending with \"-Exclude\") are often used to bypass security policies, making any modifications to these groups a potential risk. The rule provides visibility into who initiated the change, which user was added, and from which IP address, helping to prevent unauthorized policy exceptions that could weaken security controls.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let ReportPeriod = 5.5h;\r\nlet ClientTimeZone = \"Pacific/Auckland\"; // New Zealand Time Zone\r\nAuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Category == \"GroupManagement\" and ActivityDisplayName == \"Add member to group\"\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| extend InitiatedByUser = tostring(InitiatedBy.user.userPrincipalName)\r\n| extend InitiatedByIP = tostring(InitiatedBy.user.ipAddress)\r\n| where isnotempty(InitiatedByUser)\r\n| extend MemberName = tostring(TargetResources[0].displayName)\r\n| where isnotempty(MemberName)\r\n| mv-expand ModifiedProperties = TargetResources[0].modifiedProperties\r\n| where ModifiedProperties.displayName == \"Group.DisplayName\"\r\n| extend GroupName = trim('\"', tostring(ModifiedProperties.newValue))\r\n| where GroupName contains \"-CAP-\" and GroupName endswith \"-Exclude\"\r\n| project TimeGenerated, NZTime, InitiatedByUser, InitiatedByIP, MemberName, GroupName\r\n| order by TimeGenerated desc",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1098"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT6H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatedByUser"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "InitiatedByIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
