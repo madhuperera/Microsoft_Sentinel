@@ -1,0 +1,5 @@
+SigninLogs
+| where TimeGenerated > ago(10d)
+| extend AuthMethod = tostring(parse_json(AuthenticationDetails)[0].authenticationStepRequirement)
+| where AuthMethod contains "Phishing-resistant MFA"
+| project TimeGenerated, UserDisplayName, UserPrincipalName, AuthMethod

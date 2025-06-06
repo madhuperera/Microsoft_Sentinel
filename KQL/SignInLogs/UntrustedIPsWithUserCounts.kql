@@ -1,0 +1,10 @@
+let TrustedIPs = _GetWatchlist("OfficeLocations")
+| project IP;
+SigninLogs
+| where TimeGenerated > ago(14d)
+| where IPAddress !in~ (TrustedIPs)
+| summarize 
+    SignInCount = count(),
+    UniqueUserCount = dcount(UserPrincipalName)
+    by IPAddress
+| order by SignInCount desc
