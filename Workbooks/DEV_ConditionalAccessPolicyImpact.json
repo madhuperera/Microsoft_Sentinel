@@ -1,0 +1,96 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Conditional Access Trends and Changes"
+      },
+      "name": "text - 0"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "18302244-0cfb-46d8-92e2-554fa9974c38",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "type": 5,
+            "description": "Select at least one workspace that contains continuous export data based on the selected subscriptions",
+            "isRequired": true,
+            "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| project id",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "CAPTime",
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "value": "/subscriptions/1d4fe854-e01f-484a-bdfa-3e4a5d5b5a4f/resourceGroups/RG-Sentinel-PROD-AustraliaEast-001/providers/Microsoft.OperationalInsights/workspaces/rg-sentinel-prod-australiaeast-001"
+          },
+          {
+            "id": "9943b4a1-371e-4e50-8cbe-749a6dd87d76",
+            "version": "KqlParameterItem/1.0",
+            "name": "CAPTime",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\r\n  { \"value\": \"1d\",  \"label\": \"Last 24 hours\", \"selected\": true },\r\n  { \"value\": \"7d\",  \"label\": \"Last 7 days\"   },\r\n  { \"value\": \"14d\", \"label\": \"Last 14 days\"  }\r\n]\r\n",
+            "value": "7d"
+          },
+          {
+            "id": "e14cf77f-6d3d-46f2-a0bf-fe18d731e51f",
+            "version": "KqlParameterItem/1.0",
+            "name": "ZPolicyName",
+            "type": 2,
+            "query": "SigninLogs\r\n| mv-expand ConditionalAccessPolicies\r\n| extend displayName_ = tostring(ConditionalAccessPolicies.displayName)\r\n| distinct displayName_\r\n| sort by displayName_ asc",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "value": null
+          },
+          {
+            "id": "84279e48-5a8f-491d-a8a9-f399cb2cbc4c",
+            "version": "KqlParameterItem/1.0",
+            "name": "PolicyName",
+            "type": 1,
+            "value": "\"CA209-AllApps:RequireMFA-For:Internals-When:OutsideOfOffice\""
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 22 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let CAPolicyName = ({PolicyName});\r\nlet ReportPeriod = ({CAPTime});\r\nlet ResultsWithNoImpact = dynamic([\"reportOnlySuccess\",\"reportOnlyNotApplied\",\"notApplied\",\"Success\"]);\r\nlet ResultsSuccess = dynamic([\"reportOnlySuccess\",\"Success\"]);\r\nlet AllLogs = SigninLogs\r\n| mv-expand ConditionalAccessPolicies\r\n| extend Result = tostring(ConditionalAccessPolicies.result)\r\n| extend AzureADApplication = AppDisplayName\r\n| extend PolicyName = tostring(ConditionalAccessPolicies.displayName)\r\n| extend NamedNetwork = tostring(parse_json(tostring(parse_json(NetworkLocationDetails)[0].networkNames))[0])\r\n| extend ClientOS = tostring(parse_json(DeviceDetail).operatingSystem)\r\n| extend DeviceName = tostring(parse_json(DeviceDetail).displayName)\r\n| extend Managed = tostring(parse_json(DeviceDetail).isManaged)\r\n| extend Trust = tostring(parse_json(DeviceDetail).trustType)\r\n| where PolicyName =~ CAPolicyName\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| project  TimeGenerated, Category, UserPrincipalName, AzureADApplication, Grant = ConditionalAccessPolicies.enforcedGrantControls,ClientOS, DeviceName, Managed, Trust,ClientIP = IPAddress, Location, NamedNetwork, PolicyName, Result\r\n| union \r\n(AADNonInteractiveUserSignInLogs \r\n| mv-expand todynamic(ConditionalAccessPolicies)\r\n| extend Result = tostring(ConditionalAccessPolicies.result)\r\n| extend AzureADApplication = AppDisplayName\r\n| extend PolicyName = tostring(ConditionalAccessPolicies.displayName)\r\n| extend NamedNetwork = tostring(parse_json(tostring(parse_json(NetworkLocationDetails)[0].networkNames))[0])\r\n| extend ClientOS = tostring(parse_json(DeviceDetail).operatingSystem)\r\n| extend DeviceName = tostring(parse_json(DeviceDetail).displayName)\r\n| extend Managed = tostring(parse_json(DeviceDetail).isManaged)\r\n| extend Trust = tostring(parse_json(DeviceDetail).trustType)\r\n| where PolicyName =~ CAPolicyName\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| project  TimeGenerated, Category, UserPrincipalName, AzureADApplication, Grant = ConditionalAccessPolicies.enforcedGrantControls,ClientOS, DeviceName, Managed, Trust, ClientIP = IPAddress, Location, NamedNetwork, PolicyName, Result);\r\nlet UsersWithIssues = AllLogs\r\n| where Result !in~ (ResultsWithNoImpact)\r\n| distinct UserPrincipalName;\r\nlet UserWithNoIssues = AllLogs\r\n| where Result in~ (ResultsSuccess)\r\n| distinct UserPrincipalName;\r\nAllLogs\r\n| join kind=leftanti UserWithNoIssues on UserPrincipalName\r\n| distinct UserPrincipalName",
+        "size": 3,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "query - 3"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/1d4fe854-e01f-484a-bdfa-3e4a5d5b5a4f/resourcegroups/rg-sentinel-prod-australiaeast-001/providers/microsoft.operationalinsights/workspaces/rg-sentinel-prod-australiaeast-001"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

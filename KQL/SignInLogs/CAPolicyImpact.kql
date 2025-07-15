@@ -1,0 +1,40 @@
+let ReportPeriod = 2d;
+let CAPolicyName = "CA209-AllApps:RequireMFA-For:Internals-When:OutsideOfOffice";
+let ResultsWithNoImpact = dynamic(["reportOnlySuccess","reportOnlyNotApplied","notApplied","Success"]);
+let ResultsSuccess = dynamic(["reportOnlySuccess","Success"]);
+let AllLogs = SigninLogs
+| mv-expand ConditionalAccessPolicies
+| extend Result = tostring(ConditionalAccessPolicies.result)
+| extend AzureADApplication = AppDisplayName
+| extend PolicyName = tostring(ConditionalAccessPolicies.displayName)
+| extend NamedNetwork = tostring(parse_json(tostring(parse_json(NetworkLocationDetails)[0].networkNames))[0])
+| extend ClientOS = tostring(parse_json(DeviceDetail).operatingSystem)
+| extend DeviceName = tostring(parse_json(DeviceDetail).displayName)
+| extend Managed = tostring(parse_json(DeviceDetail).isManaged)
+| extend Trust = tostring(parse_json(DeviceDetail).trustType)
+| where PolicyName =~ CAPolicyName
+| where TimeGenerated > ago(ReportPeriod)
+| project  TimeGenerated, Category, UserPrincipalName, AzureADApplication, Grant = ConditionalAccessPolicies.enforcedGrantControls,ClientOS, DeviceName, Managed, Trust,ClientIP = IPAddress, Location, NamedNetwork, PolicyName, Result
+| union 
+(AADNonInteractiveUserSignInLogs 
+| mv-expand todynamic(ConditionalAccessPolicies)
+| extend Result = tostring(ConditionalAccessPolicies.result)
+| extend AzureADApplication = AppDisplayName
+| extend PolicyName = tostring(ConditionalAccessPolicies.displayName)
+| extend NamedNetwork = tostring(parse_json(tostring(parse_json(NetworkLocationDetails)[0].networkNames))[0])
+| extend ClientOS = tostring(parse_json(DeviceDetail).operatingSystem)
+| extend DeviceName = tostring(parse_json(DeviceDetail).displayName)
+| extend Managed = tostring(parse_json(DeviceDetail).isManaged)
+| extend Trust = tostring(parse_json(DeviceDetail).trustType)
+| where PolicyName =~ CAPolicyName
+| where TimeGenerated > ago(ReportPeriod)
+| project  TimeGenerated, Category, UserPrincipalName, AzureADApplication, Grant = ConditionalAccessPolicies.enforcedGrantControls,ClientOS, DeviceName, Managed, Trust, ClientIP = IPAddress, Location, NamedNetwork, PolicyName, Result);
+let UsersWithIssues = AllLogs
+| where Result !in~ (ResultsWithNoImpact)
+| distinct UserPrincipalName;
+let UserWithNoIssues = AllLogs
+| where Result in~ (ResultsSuccess)
+| distinct UserPrincipalName;
+AllLogs
+| join kind=leftanti UserWithNoIssues on UserPrincipalName
+| distinct UserPrincipalName
