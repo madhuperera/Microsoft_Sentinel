@@ -1,0 +1,32 @@
+let ReportPeriod = 365d;
+let UnmonitoredOSTypes = dynamic([
+    "Windows 10", 
+    "Windows 11", 
+    "Windows Server 2019", 
+    "Windows Server 2022",
+    "Unknown"]);
+let NewDevices = AuditLogs
+| where TimeGenerated > ago(ReportPeriod)
+| where Result == "success" and OperationName == "Add device" and Identity == "Device Registration Service"
+| mv-expand TargetResources
+| mv-expand CloudDeviceOSTypeProperty = TargetResources.modifiedProperties
+| where tostring(CloudDeviceOSTypeProperty.displayName) == "CloudDeviceOSType"
+| extend ParsedOSTypeNewValue = parse_json(tostring(CloudDeviceOSTypeProperty.newValue))
+| extend CloudDeviceOSType = tostring(ParsedOSTypeNewValue[0])
+| where isnotempty(CloudDeviceOSType) and CloudDeviceOSType !in (UnmonitoredOSTypes)
+| mv-expand DeviceIDProperty = TargetResources.modifiedProperties
+| where tostring(DeviceIDProperty.displayName) == "DeviceId"
+| extend ParsedDeviceIDNewValue = parse_json(tostring(DeviceIDProperty.newValue))
+| extend DeviceID = tostring(ParsedDeviceIDNewValue[0])
+| extend DeviceName = tostring(TargetResources.displayName)
+| where isnotempty(DeviceName)
+| project TimeGenerated, DeviceName, DeviceID, CorrelationId, CloudDeviceOSType, OperationName, Category, Identity, ActivityDisplayName;
+let DeviceRegistrations = AuditLogs
+| where TimeGenerated > ago(ReportPeriod)
+| where Result == "success" and OperationName == "Add registered users to device" and Identity == "Device Registration Service"
+| mv-expand TargetResources
+| extend UserPrincipalName = tostring(TargetResources.userPrincipalName)
+| where isnotempty(UserPrincipalName)
+| project UserPrincipalName, CorrelationId;
+NewDevices
+| join kind=leftouter (DeviceRegistrations) on CorrelationId

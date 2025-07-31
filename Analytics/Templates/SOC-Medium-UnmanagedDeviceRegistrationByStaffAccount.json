@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/35ac48fa-76e4-41d0-84b5-16beb49f4184')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/35ac48fa-76e4-41d0-84b5-16beb49f4184')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SOC-Medium-UnmanagedDeviceRegistrationByStaffAccount",
+                "description": "This detection identifies newly registered devices within the past 4 hours that are running operating systems not on the organization's approved list (e.g., Android or iOS). These events indicate that staff may be enrolling personal or unmanaged devices into the environment, which could bypass corporate compliance and security controls. The rule correlates the device registration event with the associated user account using the Correlation ID.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let ReportPeriod = 4h;\r\nlet UnmonitoredOSTypes = dynamic([\r\n    \"Windows 10\", \r\n    \"Windows 11\", \r\n    \"Windows Server 2019\", \r\n    \"Windows Server 2022\",\r\n    \"Unknown\"]);\r\nlet NewDevices = AuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Result == \"success\" and OperationName == \"Add device\" and Identity == \"Device Registration Service\"\r\n| mv-expand TargetResources\r\n| mv-expand CloudDeviceOSTypeProperty = TargetResources.modifiedProperties\r\n| where tostring(CloudDeviceOSTypeProperty.displayName) == \"CloudDeviceOSType\"\r\n| extend ParsedOSTypeNewValue = parse_json(tostring(CloudDeviceOSTypeProperty.newValue))\r\n| extend CloudDeviceOSType = tostring(ParsedOSTypeNewValue[0])\r\n| where isnotempty(CloudDeviceOSType) and CloudDeviceOSType !in (UnmonitoredOSTypes)\r\n| mv-expand DeviceIDProperty = TargetResources.modifiedProperties\r\n| where tostring(DeviceIDProperty.displayName) == \"DeviceId\"\r\n| extend ParsedDeviceIDNewValue = parse_json(tostring(DeviceIDProperty.newValue))\r\n| extend DeviceID = tostring(ParsedDeviceIDNewValue[0])\r\n| extend DeviceName = tostring(TargetResources.displayName)\r\n| where isnotempty(DeviceName)\r\n| project TimeGenerated, DeviceName, DeviceID, CorrelationId, CloudDeviceOSType, OperationName, Category, Identity, ActivityDisplayName;\r\nlet DeviceRegistrations = AuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where Result == \"success\" and OperationName == \"Add registered users to device\" and Identity == \"Device Registration Service\"\r\n| mv-expand TargetResources\r\n| extend UserPrincipalName = tostring(TargetResources.userPrincipalName)\r\n| where isnotempty(UserPrincipalName)\r\n| project UserPrincipalName, CorrelationId;\r\nNewDevices\r\n| join kind=leftouter (DeviceRegistrations) on CorrelationId",
+                "queryFrequency": "PT4H",
+                "queryPeriod": "PT4H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1200",
+                    "T1098"
+                ],
+                "subTechniques": [
+                    "T1098.005"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Unmanaged {{DeviceName}} Registered by {{UserPrincipalName}} ",
+                    "alertDescriptionFormat": "User {{UserPrincipalName}} registered a new device '{{DeviceName}}' running OS '{{CloudDeviceOSType}}'.\n\n\n",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "UserPrincipalName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AzureID",
+                                "columnName": "DeviceID"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
