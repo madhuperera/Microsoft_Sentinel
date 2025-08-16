@@ -344,7 +344,7 @@
                   },
                   "queryType": 0,
                   "resourceType": "microsoft.operationalinsights/workspaces",
-                  "value": "dkubisek@integracare.com"
+                  "value": null
                 },
                 {
                   "id": "fa370031-8e14-416b-82b7-8d95d40287d9",
@@ -412,7 +412,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Email Data Leak Monitoring\r\n\r\nThis section provides visibility into potential data exfiltration risks through email attachments sent from internal users to external recipients. The visualizations in this section are designed to help identify abnormal patterns and high-risk behaviors based on the following criteria:\r\n\r\n- Emails sent from internal domains to external recipients\r\n- File types typically ignored in telemetry (e.g., images) are excluded\r\n- Trends are shown over time to detect spikes in external sharing activity\r\n- Distinctions are made between consumer email providers and other external domains\r\n\r\nThe insights below can help analysts monitor for:\r\n- Repeated sharing of attachments with non-corporate domains\r\n- Sudden increases in email activity to specific recipients\r\n- Potential misuse of email for data exfiltration by insiders\r\n\r\nUse the charts below to drill into specific senders, recipient domains, and attachment behaviors during the observed reporting period.\r\n"
+              "json": "# Email Data Leak Monitoring\r\n\r\nThis section provides visibility into potential data exfiltration risks through email attachments sent from internal users to external recipients. The visualizations in this section are designed to help identify abnormal patterns and high-risk behaviors based on the following criteria:\r\n\r\n- Emails sent from internal domains to external recipients\r\n- File types typically ignored in telemetry (e.g., images) are excluded\r\n- Trends are shown over time to detect spikes in external sharing activity\r\n- Distinctions are made between consumer email providers and other external domains\r\n\r\nThe insights below can help analysts monitor for:\r\n- Repeated sharing of attachments with non-corporate domains\r\n- Sudden increases in email activity to specific recipients\r\n- Potential misuse of email for data exfiltration by insiders\r\n\r\nUse the charts below to drill into specific senders, recipient domains, and attachment behaviors during the observed reporting period.\r\n"
             },
             "name": "text - 0"
           },
@@ -465,141 +465,18 @@
             "name": "text - 10"
           },
           {
-            "type": 3,
+            "type": 1,
             "content": {
-              "version": "KqlItem/1.0",
-              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where FileType !in (FileTypesToIgnore)\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientDomain\r\n| render linechart kind=unstacked",
-              "size": 3,
-              "title": "External Attachment Volume by Recipient Domain",
-              "exportToExcelOptions": "all",
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "gridSettings": {
-                "formatters": [
-                  {
-                    "columnMatch": "UserDisplayName",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "UserObjectId",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "Operation",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "BaselineCountThreshold",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "BaselineCount",
-                    "formatter": 3,
-                    "formatOptions": {
-                      "palette": "yellowOrangeRed"
-                    }
-                  },
-                  {
-                    "columnMatch": "CurrentCountThreshold",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "CurrentCount",
-                    "formatter": 3,
-                    "formatOptions": {
-                      "palette": "yellowOrangeRed"
-                    }
-                  },
-                  {
-                    "columnMatch": "ChangeThreshold",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "ChangeRatio",
-                    "formatter": 18,
-                    "formatOptions": {
-                      "thresholdsOptions": "icons",
-                      "thresholdsGrid": [
-                        {
-                          "operator": ">",
-                          "thresholdValue": "100",
-                          "representation": "2",
-                          "text": "{0}{1}"
-                        },
-                        {
-                          "operator": "Default",
-                          "thresholdValue": null,
-                          "representation": "success",
-                          "text": "{0}{1}"
-                        }
-                      ]
-                    }
-                  }
-                ],
-                "hierarchySettings": {
-                  "treeType": 1,
-                  "groupBy": [
-                    "Operation"
-                  ],
-                  "expandTopLevel": true,
-                  "finalBy": "UserDisplayName"
-                },
-                "labelSettings": [
-                  {
-                    "columnId": "UserDisplayName",
-                    "label": "User Account"
-                  },
-                  {
-                    "columnId": "UserPrincipalName",
-                    "label": "Username"
-                  },
-                  {
-                    "columnId": "Operation",
-                    "label": "Activity"
-                  },
-                  {
-                    "columnId": "BaselineCountThreshold",
-                    "label": "Baseline Count [Threshold]"
-                  },
-                  {
-                    "columnId": "BaselineCount",
-                    "label": "Baseline Count"
-                  },
-                  {
-                    "columnId": "CurrentCountThreshold",
-                    "label": "Current Count [Threshold]"
-                  },
-                  {
-                    "columnId": "CurrentCount",
-                    "label": "Current Count"
-                  },
-                  {
-                    "columnId": "ChangeThreshold",
-                    "label": "Change [Threshold]"
-                  },
-                  {
-                    "columnId": "ChangeRatio",
-                    "label": "Change Ratio"
-                  }
-                ]
-              }
+              "json": "## Overall External Attachment Trend\r\n\r\nShows the total count of emails with attachments sent to any external domain from internal users. The graph is ungrouped and reflects the overall volume trend across time, helping identify bursts of outbound attachment activity that could warrant deeper investigation.\r\n"
             },
-            "customWidth": "50",
-            "name": "query - 1",
-            "styleSettings": {
-              "margin": "5",
-              "padding": "2",
-              "maxWidth": "50",
-              "showBorder": true
-            }
+            "name": "text - 6"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where FileType !in (FileTypesToIgnore)\r\n// Reporting\r\n| summarize count() by bin(TimeGenerated, BinPeriod)\r\n| render linechart kind=unstacked",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n// Reporting\r\n| summarize TotalEmails = count() by bin(TimeGenerated, BinPeriod)\r\n| render linechart kind=unstacked",
               "size": 3,
-              "title": "Overall External Attachment Trend",
               "exportToExcelOptions": "all",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -713,44 +590,28 @@
                 ]
               }
             },
-            "customWidth": "50",
             "name": "query - 1",
             "styleSettings": {
               "margin": "5",
               "padding": "2",
-              "maxWidth": "50",
               "showBorder": true
             }
           },
           {
             "type": 1,
             "content": {
-              "json": "### External Attachment Volume by Recipient Domain\r\n\r\nDisplays the number of emails with attachments sent from internal users to external domains over time, grouped by recipient domain.  \r\nThis helps identify which external domains are receiving the highest volume of internal attachments and when that activity peaks.  \r\nCommon image file types are excluded to focus on potentially sensitive content.\r\n"
+              "json": "## External Attachment Volume by Recipient Domains (TOP 10)\r\n\r\nDisplays the number of emails with attachments sent from internal users to external domains over time, grouped by recipient domain. This helps identify which external domains are receiving the highest volume of internal attachments and when that activity peaks. Common image file types are excluded to focus on potentially sensitive content.\r\n"
             },
-            "customWidth": "50",
-            "name": "text - 5",
-            "styleSettings": {
-              "maxWidth": "50"
-            }
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "### Overall External Attachment Trend\r\n\r\nShows the total count of emails with attachments sent to any external domain from internal users.  \r\n\r\nThe graph is ungrouped and reflects the overall volume trend across time, helping identify bursts of outbound attachment activity that could warrant deeper investigation.\r\n"
-            },
-            "customWidth": "50",
-            "name": "text - 6",
-            "styleSettings": {
-              "maxWidth": "50"
-            }
+            "name": "text - 5"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nlet PDOList = externaldata(DomainNames: string,values:dynamic) [@\"https://gist.githubusercontent.com/ammarshah/f5c2624d767f91a7cbdc4e54db8dd0bf/raw/660fd949eba09c0b86574d9d3aa0f2137161fc7c/all_email_provider_domains.txt\"]\r\nwith (format=\"txt\",ignoreFirstRecord=false)\r\n| project DomainNames;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain in~ (PDOList)\r\n| where FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress, SenderFromAddress\r\n| where NumberOfEmails >= MaxEmailCountThreshold\r\n| render linechart kind=unstacked",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet TopN = 10;\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nlet TopRecipientDomains = EmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| summarize TotalEmails = count() by RecipientDomain\r\n| top TopN by TotalEmails desc\r\n| project RecipientDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain in (TopRecipientDomains)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientDomain\r\n| render linechart kind=unstacked",
               "size": 3,
-              "title": "Attachments Sent to Personal Email Recipients",
+              "exportFieldName": "RecipientDomain",
+              "exportParameterName": "_RecipientDomain",
               "exportToExcelOptions": "all",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -823,63 +684,71 @@
                   ],
                   "expandTopLevel": true,
                   "finalBy": "UserDisplayName"
-                },
-                "labelSettings": [
-                  {
-                    "columnId": "UserDisplayName",
-                    "label": "User Account"
-                  },
-                  {
-                    "columnId": "UserPrincipalName",
-                    "label": "Username"
-                  },
-                  {
-                    "columnId": "Operation",
-                    "label": "Activity"
-                  },
-                  {
-                    "columnId": "BaselineCountThreshold",
-                    "label": "Baseline Count [Threshold]"
-                  },
-                  {
-                    "columnId": "BaselineCount",
-                    "label": "Baseline Count"
-                  },
-                  {
-                    "columnId": "CurrentCountThreshold",
-                    "label": "Current Count [Threshold]"
-                  },
-                  {
-                    "columnId": "CurrentCount",
-                    "label": "Current Count"
-                  },
-                  {
-                    "columnId": "ChangeThreshold",
-                    "label": "Change [Threshold]"
-                  },
-                  {
-                    "columnId": "ChangeRatio",
-                    "label": "Change Ratio"
-                  }
-                ]
+                }
+              },
+              "chartSettings": {
+                "showLegend": true
               }
             },
-            "customWidth": "50",
-            "name": "query - 1 - Copy",
+            "customWidth": "100",
+            "name": "query - 1",
             "styleSettings": {
               "margin": "5",
               "padding": "2",
-              "maxWidth": "50",
+              "maxWidth": "100",
               "showBorder": true
             }
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "0e8eb55d-4e65-45f6-8f71-5086e6d2e6e6",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "TopRecipientDomain",
+                  "label": "Top Recipient Domains",
+                  "type": 2,
+                  "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet TopN = 10;\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| summarize TotalEmails = count() by RecipientDomain\r\n| top TopN by TotalEmails desc\r\n| project TopRecipientDomain = RecipientDomain\r\n| sort by TopRecipientDomain asc",
+                  "typeSettings": {
+                    "additionalResourceOptions": []
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces",
+                  "value": "gmail.com"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 15"
           },
           {
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet PDOList = externaldata(DomainNames: string,values:dynamic) [@\"https://gist.githubusercontent.com/ammarshah/f5c2624d767f91a7cbdc4e54db8dd0bf/raw/660fd949eba09c0b86574d9d3aa0f2137161fc7c/all_email_provider_domains.txt\"]\r\nwith (format=\"txt\",ignoreFirstRecord=false)\r\n| project DomainNames;\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain !in~ (PDOList)\r\n| where FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress, SenderFromAddress\r\n| where NumberOfEmails >= MaxEmailCountThreshold\r\n| render linechart kind=unstacked",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet TopRecipientDomain = '{TopRecipientDomain}';\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain =~ TopRecipientDomain\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| project TimeGenerated, SenderFromAddress, RecipientEmailAddress, FileType, FileName\r\n| sort by TimeGenerated desc",
+              "size": 0,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "query - 16"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "## Attachments Sent to Personal Email Recipients (TOP 10)\r\n\r\nMonitors attachment emails sent from internal users to popular public email provider domains (e.g., gmail.com, yahoo.com). This chart is useful for detecting insider activity that involves sending corporate data to personal or untrusted addresses. Any spike may indicate risky behavior or potential data exfiltration.\r\n"
+            },
+            "name": "text - 7"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet TopN = 10;\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nlet PDOList = externaldata(DomainNames: string,values:dynamic) [@\"https://gist.githubusercontent.com/ammarshah/f5c2624d767f91a7cbdc4e54db8dd0bf/raw/660fd949eba09c0b86574d9d3aa0f2137161fc7c/all_email_provider_domains.txt\"]\r\nwith (format=\"txt\",ignoreFirstRecord=false)\r\n| project DomainNames;\r\nlet TopRecipientEmailAddresses = EmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain in~ (PDOList)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n| summarize TotalEmails = count() by RecipientEmailAddress\r\n| top TopN by TotalEmails desc;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain in~ (PDOList) and RecipientEmailAddress in~ (TopRecipientEmailAddresses)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress, SenderFromAddress\r\n| where NumberOfEmails >= MaxEmailCountThreshold\r\n| render linechart kind=unstacked",
               "size": 3,
-              "title": "Attachments Sent to Business Email Recipients",
               "exportToExcelOptions": "all",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -993,38 +862,151 @@
                 ]
               },
               "chartSettings": {
-                "showDataPoints": true
+                "showLegend": true
               }
             },
-            "customWidth": "50",
-            "name": "query - 1 - Copy - Copy",
+            "name": "query - 1 - Copy",
             "styleSettings": {
               "margin": "5",
               "padding": "2",
-              "maxWidth": "50",
               "showBorder": true
             }
           },
           {
             "type": 1,
             "content": {
-              "json": "### Attachments Sent to Personal Email Recipients\r\n\r\nMonitors attachment emails sent from internal users to popular public email provider domains (e.g., gmail.com, yahoo.com).  \r\nThis chart is useful for detecting insider activity that involves sending corporate data to personal or untrusted addresses.  \r\nAny spike may indicate risky behavior or potential data exfiltration.\r\n"
+              "json": "## Attachments Sent to Business Email Recipients (TOP 10)\r\n\r\nTracks internal emails with attachments sent to business email domains. These could include business partners, vendors, or unlisted/unrecognized third-party domains. Monitoring this channel helps spot unsanctioned or unusual external data transfers.\r\n"
             },
-            "customWidth": "50",
-            "name": "text - 7",
-            "styleSettings": {
-              "maxWidth": "50"
-            }
+            "name": "text - 8"
           },
           {
-            "type": 1,
+            "type": 3,
             "content": {
-              "json": "### Attachments Sent to Business Email Recipients\r\n\r\nTracks internal emails with attachments sent to business email domains.\r\n\r\nThese could include business partners, vendors, or unlisted/unrecognized third-party domains.  \r\nMonitoring this channel helps spot unsanctioned or unusual external data transfers.\r\n"
+              "version": "KqlItem/1.0",
+              "query": "let FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet TopN = 10;\r\nlet PDOList = externaldata(DomainNames: string,values:dynamic) [@\"https://gist.githubusercontent.com/ammarshah/f5c2624d767f91a7cbdc4e54db8dd0bf/raw/660fd949eba09c0b86574d9d3aa0f2137161fc7c/all_email_provider_domains.txt\"]\r\nwith (format=\"txt\",ignoreFirstRecord=false)\r\n| project DomainNames;\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nlet TopRecipientEmailAddresses = \r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain !in~ (PDOList)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n| summarize TotalEmails = count() by RecipientEmailAddress\r\n| top TopN by TotalEmails desc;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where isnotempty(SenderDisplayName)\r\n| where RecipientDomain !in (InternalDomains) and RecipientDomain !in~ (PDOList) and RecipientEmailAddress in~ (TopRecipientEmailAddresses)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| extend AccountCustomEntity = SenderFromAddress\r\n// Reporting\r\n| summarize NumberOfEmails = count() by bin(TimeGenerated, BinPeriod), RecipientEmailAddress, SenderFromAddress\r\n| where NumberOfEmails >= MaxEmailCountThreshold\r\n| render linechart kind=unstacked",
+              "size": 3,
+              "exportToExcelOptions": "all",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "UserDisplayName",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "UserObjectId",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "Operation",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "BaselineCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "CurrentCountThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "CurrentCount",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "yellowOrangeRed"
+                    }
+                  },
+                  {
+                    "columnMatch": "ChangeThreshold",
+                    "formatter": 5
+                  },
+                  {
+                    "columnMatch": "ChangeRatio",
+                    "formatter": 18,
+                    "formatOptions": {
+                      "thresholdsOptions": "icons",
+                      "thresholdsGrid": [
+                        {
+                          "operator": ">",
+                          "thresholdValue": "100",
+                          "representation": "2",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "Default",
+                          "thresholdValue": null,
+                          "representation": "success",
+                          "text": "{0}{1}"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "hierarchySettings": {
+                  "treeType": 1,
+                  "groupBy": [
+                    "Operation"
+                  ],
+                  "expandTopLevel": true,
+                  "finalBy": "UserDisplayName"
+                },
+                "labelSettings": [
+                  {
+                    "columnId": "UserDisplayName",
+                    "label": "User Account"
+                  },
+                  {
+                    "columnId": "UserPrincipalName",
+                    "label": "Username"
+                  },
+                  {
+                    "columnId": "Operation",
+                    "label": "Activity"
+                  },
+                  {
+                    "columnId": "BaselineCountThreshold",
+                    "label": "Baseline Count [Threshold]"
+                  },
+                  {
+                    "columnId": "BaselineCount",
+                    "label": "Baseline Count"
+                  },
+                  {
+                    "columnId": "CurrentCountThreshold",
+                    "label": "Current Count [Threshold]"
+                  },
+                  {
+                    "columnId": "CurrentCount",
+                    "label": "Current Count"
+                  },
+                  {
+                    "columnId": "ChangeThreshold",
+                    "label": "Change [Threshold]"
+                  },
+                  {
+                    "columnId": "ChangeRatio",
+                    "label": "Change Ratio"
+                  }
+                ]
+              },
+              "chartSettings": {
+                "showLegend": true,
+                "showDataPoints": true
+              }
             },
-            "customWidth": "50",
-            "name": "text - 8",
+            "name": "query - 1 - Copy - Copy",
             "styleSettings": {
-              "maxWidth": "50"
+              "margin": "5",
+              "padding": "2",
+              "showBorder": true
             }
           },
           {
@@ -1069,7 +1051,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let StaffName = '{SenderDisplayName}';\r\nlet FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where FileType !in (FileTypesToIgnore)\r\n| where isnotempty(SenderDisplayName) and SenderDisplayName =~ StaffName\r\n| project TimeGenerated, SenderFromAddress, RecipientDomain, RecipientEmailAddress, FileType, FileName\r\n| sort by TimeGenerated desc",
+              "query": "let StaffName = '{SenderDisplayName}';\r\nlet FileTypesToIgnore = dynamic([\"png\",\"jpeg\",\"gif\"]); // List of File Types to Ignore\r\nlet ReportPeriod = ({Period}); // Report Period\r\nlet BinPeriod = ({EmailVolumeAggregationInterval});\r\nlet MaxEmailCountThreshold = 1; // Number of Emails for a given Bin Period\r\nlet InternalDomains = EmailEvents\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where EmailDirection == \"Intra-org\"\r\n| distinct SenderMailFromDomain;\r\nEmailAttachmentInfo\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend SenderDomain = tostring(split(SenderFromAddress, \"@\")[1])\r\n| extend RecipientDomain = tostring(split(RecipientEmailAddress, \"@\")[1])\r\n| where SenderDomain in (InternalDomains)\r\n| where RecipientDomain !in (InternalDomains)\r\n| where isnotempty(FileType) and FileType !in (FileTypesToIgnore)\r\n| where isnotempty(SenderDisplayName) and SenderDisplayName =~ StaffName\r\n| project TimeGenerated, SenderFromAddress, RecipientDomain, RecipientEmailAddress, FileType, FileName\r\n| sort by TimeGenerated desc",
               "size": 3,
               "title": "Email Attachment Report per Staff Member",
               "exportToExcelOptions": "all",
@@ -1146,12 +1128,10 @@
                 }
               }
             },
-            "customWidth": "50",
             "name": "query - 1 - Copy",
             "styleSettings": {
               "margin": "5",
               "padding": "2",
-              "maxWidth": "50",
               "showBorder": true
             }
           }
