@@ -1,0 +1,40 @@
+let _SignInPeriod = 360d;
+//
+let OldestSignInUsers = AADNonInteractiveUserSignInLogs
+| union SigninLogs
+| where TimeGenerated > ago(_SignInPeriod)
+| where isnotempty(UserPrincipalName) and UserPrincipalName contains "@"
+| where UserType == "Member"
+| where ResultType == 0
+| summarize OldestSignIn = min(TimeGenerated) by UserPrincipalName, UserDisplayName, UserId
+| sort by UserDisplayName asc;
+//
+let UsersToReportOn = OldestSignInUsers | distinct UserPrincipalName;
+//
+let RecentSignInUsers = 
+AADNonInteractiveUserSignInLogs
+| union SigninLogs
+| where TimeGenerated > ago(_SignInPeriod)
+| where isnotempty(UserPrincipalName) and UserPrincipalName in~ (UsersToReportOn)
+| where UserType == "Member"
+| where ResultType == 0
+| summarize RecentSignIn = max(TimeGenerated) by UserPrincipalName, UserDisplayName, UserId
+| sort by UserDisplayName asc;
+//
+OldestSignInUsers
+| join kind=fullouter RecentSignInUsers on UserPrincipalName
+| extend UserDisplayName = coalesce(UserDisplayName, UserDisplayName1),
+         UserPrincipalName = coalesce(UserPrincipalName, UserPrincipalName1),
+         UserId = coalesce(UserId, UserId1)
+| extend DaysSinceRecentSignIn =
+    iif(isnull(RecentSignIn),
+        long(null),
+        tolong(datetime_diff('day', now(), RecentSignIn)))
+| extend InactivityBucket = case(
+    isnull(RecentSignIn), "No Sign-In",
+    datetime_diff('day', now(), RecentSignIn) <= 30, "Active - Recently used",
+    datetime_diff('day', now(), RecentSignIn) <= 90, "Review - Infrequent use",
+    datetime_diff('day', now(), RecentSignIn) <= 180, "Low Activity - Check with user",
+    "Stale - No sign-in and Dormant - Candidate for remova")
+| project UserDisplayName, UserPrincipalName, UserId, OldestSignIn, RecentSignIn, DaysSinceRecentSignIn, InactivityBucket
+| order by DaysSinceRecentSignIn desc, UserDisplayName asc
