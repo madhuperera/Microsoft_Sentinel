@@ -1,4 +1,5 @@
-let _SignInPeriod = 360d;
+let _SignInPeriod = 720d;
+let _InactivityDayThreshold = 30;
 //
 let OldestSignInUsers = AADNonInteractiveUserSignInLogs
 | union SigninLogs
@@ -37,4 +38,5 @@ OldestSignInUsers
     datetime_diff('day', now(), RecentSignIn) <= 180, "Low Activity - Check with user",
     "Stale - No sign-in and Dormant - Candidate for remova")
 | project UserDisplayName, UserPrincipalName, UserId, OldestSignIn, RecentSignIn, DaysSinceRecentSignIn, InactivityBucket
+| where DaysSinceRecentSignIn > _InactivityDayThreshold
 | order by DaysSinceRecentSignIn desc, UserDisplayName asc

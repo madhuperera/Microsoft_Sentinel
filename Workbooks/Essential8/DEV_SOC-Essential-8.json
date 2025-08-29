@@ -1,0 +1,69 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "Introduction"
+                  },
+                  "name": "text - 0"
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "parameters - 2"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "let _SignInPeriod = 720d;\r\nlet _InactivityDayThreshold = 30;\r\n//\r\nlet OldestSignInUsers = AADNonInteractiveUserSignInLogs\r\n| union SigninLogs\r\n| where TimeGenerated > ago(_SignInPeriod)\r\n| where isnotempty(UserPrincipalName) and UserPrincipalName contains \"@\"\r\n| where UserType == \"Member\"\r\n| where ResultType == 0\r\n| summarize OldestSignIn = min(TimeGenerated) by UserPrincipalName, UserDisplayName, UserId\r\n| sort by UserDisplayName asc;\r\n//\r\nlet UsersToReportOn = OldestSignInUsers | distinct UserPrincipalName;\r\n//\r\nlet RecentSignInUsers = \r\nAADNonInteractiveUserSignInLogs\r\n| union SigninLogs\r\n| where TimeGenerated > ago(_SignInPeriod)\r\n| where isnotempty(UserPrincipalName) and UserPrincipalName in~ (UsersToReportOn)\r\n| where UserType == \"Member\"\r\n| where ResultType == 0\r\n| summarize RecentSignIn = max(TimeGenerated) by UserPrincipalName, UserDisplayName, UserId\r\n| sort by UserDisplayName asc;\r\n//\r\nOldestSignInUsers\r\n| join kind=fullouter RecentSignInUsers on UserPrincipalName\r\n| extend UserDisplayName = coalesce(UserDisplayName, UserDisplayName1),\r\n         UserPrincipalName = coalesce(UserPrincipalName, UserPrincipalName1),\r\n         UserId = coalesce(UserId, UserId1)\r\n| extend DaysSinceRecentSignIn =\r\n    iif(isnull(RecentSignIn),\r\n        long(null),\r\n        tolong(datetime_diff('day', now(), RecentSignIn)))\r\n| extend InactivityBucket = case(\r\n    isnull(RecentSignIn), \"No Sign-In\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 30, \"Active - Recently used\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 90, \"Review - Infrequent use\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 180, \"Low Activity - Check with user\",\r\n    \"Stale - No sign-in and Dormant - Candidate for remova\")\r\n| project UserDisplayName, UserPrincipalName, UserId, OldestSignIn, RecentSignIn, DaysSinceRecentSignIn, InactivityBucket\r\n| where DaysSinceRecentSignIn > _InactivityDayThreshold\r\n| order by DaysSinceRecentSignIn desc, UserDisplayName asc",
+                    "size": 0,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "query - 1"
+                }
+              ]
+            },
+            "name": "group - 0",
+            "styleSettings": {
+              "margin": "2",
+              "padding": "2",
+              "showBorder": true
+            }
+          }
+        ]
+      },
+      "name": "group - 0",
+      "styleSettings": {
+        "margin": "2",
+        "padding": "2",
+        "showBorder": true
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/647ae86e-0a57-4208-ad10-cd71881dd3a8/resourcegroups/rf-australiaeast-prod-security-sentinel-internal-rg/providers/microsoft.operationalinsights/workspaces/rf-sentinel-prod-workspace"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
