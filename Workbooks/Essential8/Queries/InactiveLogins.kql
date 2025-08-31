@@ -22,8 +22,8 @@ AADNonInteractiveUserSignInLogs
 | summarize RecentSignIn = max(TimeGenerated) by UserPrincipalName, UserDisplayName, UserId
 | sort by UserDisplayName asc;
 //
-OldestSignInUsers
-| join kind=fullouter RecentSignInUsers on UserPrincipalName
+RecentSignInUsers
+| join kind=fullouter OldestSignInUsers on UserPrincipalName
 | extend UserDisplayName = coalesce(UserDisplayName, UserDisplayName1),
          UserPrincipalName = coalesce(UserPrincipalName, UserPrincipalName1),
          UserId = coalesce(UserId, UserId1)
@@ -36,7 +36,7 @@ OldestSignInUsers
     datetime_diff('day', now(), RecentSignIn) <= 30, "Active - Recently used",
     datetime_diff('day', now(), RecentSignIn) <= 90, "Review - Infrequent use",
     datetime_diff('day', now(), RecentSignIn) <= 180, "Low Activity - Check with user",
-    "Stale - No sign-in and Dormant - Candidate for remova")
+    "Stale - No sign-in and Dormant - Candidate for removal")
 | project UserDisplayName, UserPrincipalName, UserId, OldestSignIn, RecentSignIn, DaysSinceRecentSignIn, InactivityBucket
 | where DaysSinceRecentSignIn > _InactivityDayThreshold
 | order by DaysSinceRecentSignIn desc, UserDisplayName asc

@@ -1,0 +1,38 @@
+let _SignInPeriod = 720d;
+let _InactivityDayThreshold = 30;
+let _activePeriod = 30d;
+let _userType = "Member";
+let _accountPrefixToIgnore = "zz_";
+let ActiveAccountIdentityInfo = IdentityInfo
+| where TimeGenerated > ago(_activePeriod)
+| where isnotempty(IsAccountEnabled) and IsAccountEnabled == true
+| where UserType == _userType
+| where AccountDisplayName !startswith _accountPrefixToIgnore
+| summarize TimeGenerated = max(TimeGenerated) by UserPrincipalName=AccountUPN, UserDisplayName=AccountDisplayName, UserId=AccountObjectId, JobTitle, MailAddress;
+//
+let UsersToReportOn = ActiveAccountIdentityInfo | distinct UserId;
+//
+let RecentSignInUsers = 
+AADNonInteractiveUserSignInLogs
+| union SigninLogs
+| where TimeGenerated > ago(_SignInPeriod)
+| where isnotempty(UserId) and UserId in~ (UsersToReportOn)
+| where UserType == "Member"
+| where ResultType == 0
+| summarize RecentSignIn = max(TimeGenerated) by UserId;
+ActiveAccountIdentityInfo
+| join kind=leftouter RecentSignInUsers on UserId
+| extend UserId = coalesce(UserId, UserId1)
+| extend DaysSinceRecentSignIn =
+    iif(isnull(RecentSignIn),
+        long(null),
+        tolong(datetime_diff('day', now(), RecentSignIn)))
+| extend InactivityBucket = case(
+    isnull(RecentSignIn), "No Sign-In",
+    datetime_diff('day', now(), RecentSignIn) <= 30, "Active - Recently used",
+    datetime_diff('day', now(), RecentSignIn) <= 90, "Review - Infrequent use",
+    datetime_diff('day', now(), RecentSignIn) <= 180, "Low Activity - Check with user",
+    "Stale - No sign-in and Dormant - Candidate for removal")
+| project UserDisplayName, UserPrincipalName, DaysSinceRecentSignIn, InactivityBucket, RecentSignIn, UserId, JobTitle
+| where DaysSinceRecentSignIn > _InactivityDayThreshold or isempty(DaysSinceRecentSignIn)
+| order by DaysSinceRecentSignIn desc, UserDisplayName asc

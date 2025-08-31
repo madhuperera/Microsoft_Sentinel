@@ -8,13 +8,6 @@
         "groupType": "editable",
         "items": [
           {
-            "type": 1,
-            "content": {
-              "json": "# Introduction\r\n\r\nThis workbook supports ongoing security governance and aligns with **Essential Eight recommendations** by providing visibility into common risk areas across the Microsoft 365 environment.  \r\n\r\nThe goal is to create a single view where administrators can monitor and track activities that directly map to Essential Eight controls. This helps reduce attack surface, highlight risks, and improve operational hygiene across the tenant.\r\n"
-            },
-            "name": "text - 0"
-          },
-          {
             "type": 12,
             "content": {
               "version": "NotebookGroup/1.0",
@@ -23,15 +16,26 @@
                 {
                   "type": 1,
                   "content": {
-                    "json": "## Stale or Inactive User Accounts\r\n\r\nThis section highlights **active and enabled accounts** that have not been used recently. Dormant accounts represent a security risk, as they may be exploited by attackers if left unmanaged.  \r\n\r\nThe workbook calculates the **days since the last successful sign-in** and places accounts into **Inactivity Buckets** to make risks clear:\r\n\r\n- **Active (<30 days)** – Recently used; no action required.  \r\n- **Review (30–90 days)** – Infrequent use; review with user or owner.  \r\n- **Low Activity (90–180 days)** – Extended inactivity; validate necessity with user.  \r\n- **Stale (>180 days)** – Dormant accounts; candidates for removal or disablement.  \r\n\r\n### Color Coding\r\n- **Dark Red** – Stale (No sign-in >180 days, candidate for removal)  \r\n- **Orange** – Low Activity (90–180 days, check with user)  \r\n- **Yellow** – Review (30–90 days, infrequent use)  \r\n\r\nThis helps administrators quickly identify accounts that may no longer be required, aligning with **Essential Eight account lifecycle management** recommendations.\r\n"
+                    "json": "Introduction"
                   },
-                  "name": "text - 1"
+                  "name": "text - 0"
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "parameters": [],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "name": "parameters - 2"
                 },
                 {
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let _SignInPeriod = 720d;\r\nlet _InactivityDayThreshold = 30;\r\nlet _activePeriod = 30d;\r\nlet _userType = \"Member\";\r\nlet _accountPrefixToIgnore = \"zz_\";\r\nlet ActiveAccountIdentityInfo = IdentityInfo\r\n| where TimeGenerated > ago(_activePeriod)\r\n| where isnotempty(IsAccountEnabled) and IsAccountEnabled == true\r\n| where UserType == _userType\r\n| where AccountDisplayName !startswith _accountPrefixToIgnore\r\n| summarize TimeGenerated = max(TimeGenerated) by UserPrincipalName=AccountUPN, UserDisplayName=AccountDisplayName, UserId=AccountObjectId, JobTitle, MailAddress;\r\n//\r\nlet UsersToReportOn = ActiveAccountIdentityInfo | distinct UserId;\r\n//\r\nlet RecentSignInUsers = \r\nAADNonInteractiveUserSignInLogs\r\n| union SigninLogs\r\n| where TimeGenerated > ago(_SignInPeriod)\r\n| where isnotempty(UserId) and UserId in~ (UsersToReportOn)\r\n| where UserType == \"Member\"\r\n| where ResultType == 0\r\n| summarize RecentSignIn = max(TimeGenerated) by UserId;\r\nActiveAccountIdentityInfo\r\n| join kind=leftouter RecentSignInUsers on UserId\r\n| extend UserId = coalesce(UserId, UserId1)\r\n| extend DaysSinceRecentSignIn =\r\n    iif(isnull(RecentSignIn),\r\n        long(null),\r\n        tolong(datetime_diff('day', now(), RecentSignIn)))\r\n| extend InactivityBucket = case(\r\n    isnull(RecentSignIn), \"No Sign-In\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 30, \"Active - Recently used\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 90, \"Review - Infrequent use\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 180, \"Low Activity - Check with user\",\r\n    \"Stale - No sign-in and Dormant - Candidate for removal\")\r\n| project UserDisplayName, UserPrincipalName, DaysSinceRecentSignIn, InactivityBucket, RecentSignIn, UserId, JobTitle\r\n| where DaysSinceRecentSignIn > _InactivityDayThreshold or isempty(DaysSinceRecentSignIn)\r\n| order by DaysSinceRecentSignIn desc, UserDisplayName asc",
+                    "query": "let _SignInPeriod = 720d;\r\nlet _InactivityDayThreshold = 30;\r\n//\r\nlet OldestSignInUsers = AADNonInteractiveUserSignInLogs\r\n| union SigninLogs\r\n| where TimeGenerated > ago(_SignInPeriod)\r\n| where isnotempty(UserPrincipalName) and UserPrincipalName contains \"@\"\r\n| where UserType == \"Member\"\r\n| where ResultType == 0\r\n| summarize OldestSignIn = min(TimeGenerated) by UserPrincipalName, UserDisplayName, UserId\r\n| sort by UserDisplayName asc;\r\n//\r\nlet UsersToReportOn = OldestSignInUsers | distinct UserPrincipalName;\r\n//\r\nlet RecentSignInUsers = \r\nAADNonInteractiveUserSignInLogs\r\n| union SigninLogs\r\n| where TimeGenerated > ago(_SignInPeriod)\r\n| where isnotempty(UserPrincipalName) and UserPrincipalName in~ (UsersToReportOn)\r\n| where UserType == \"Member\"\r\n| where ResultType == 0\r\n| summarize RecentSignIn = max(TimeGenerated) by UserPrincipalName, UserDisplayName, UserId\r\n| sort by UserDisplayName asc;\r\n//\r\nlet UsersWithRecentSignIns = RecentSignInUsers\r\n| join kind=fullouter OldestSignInUsers on UserPrincipalName\r\n| extend UserDisplayName = coalesce(UserDisplayName, UserDisplayName1),\r\n         UserPrincipalName = coalesce(UserPrincipalName, UserPrincipalName1),\r\n         UserId = coalesce(UserId, UserId1)\r\n| extend DaysSinceRecentSignIn =\r\n    iif(isnull(RecentSignIn),\r\n        long(null),\r\n        tolong(datetime_diff('day', now(), RecentSignIn)))\r\n| where DaysSinceRecentSignIn <= _InactivityDayThreshold;\r\n//\r\nlet UsersToNotReportOn = UsersWithRecentSignIns | distinct UserPrincipalName;\r\n//\r\nRecentSignInUsers\r\n| join kind=fullouter OldestSignInUsers on UserPrincipalName\r\n| where UserPrincipalName !in~ (UsersToNotReportOn)\r\n| extend UserDisplayName = coalesce(UserDisplayName, UserDisplayName1),\r\n         UserPrincipalName = coalesce(UserPrincipalName, UserPrincipalName1),\r\n         UserId = coalesce(UserId, UserId1)\r\n| extend DaysSinceRecentSignIn =\r\n    iif(isnull(RecentSignIn),\r\n        long(null),\r\n        tolong(datetime_diff('day', now(), RecentSignIn)))\r\n| extend InactivityBucket = case(\r\n    isnull(RecentSignIn), \"No Sign-In\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 30, \"Active - Recently used\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 90, \"Review - Infrequent use\",\r\n    datetime_diff('day', now(), RecentSignIn) <= 180, \"Low Activity - Check with user\",\r\n    \"Stale - No sign-in and Dormant - Candidate for removal\")\r\n| project UserDisplayName, UserPrincipalName, UserId, OldestSignIn, RecentSignIn, DaysSinceRecentSignIn, InactivityBucket\r\n| where DaysSinceRecentSignIn > _InactivityDayThreshold\r\n| order by DaysSinceRecentSignIn desc, UserDisplayName asc\r\n",
                     "size": 3,
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
@@ -126,6 +130,12 @@
                           }
                         }
                       ],
+                      "sortBy": [
+                        {
+                          "itemKey": "$gen_thresholds_DaysSinceRecentSignIn_5",
+                          "sortOrder": 2
+                        }
+                      ],
                       "labelSettings": [
                         {
                           "columnId": "UserDisplayName",
@@ -136,24 +146,33 @@
                           "label": "Account Username"
                         },
                         {
-                          "columnId": "DaysSinceRecentSignIn",
-                          "label": "Days Since Most Recent Sign-In"
+                          "columnId": "UserId",
+                          "label": "User ID"
                         },
                         {
-                          "columnId": "InactivityBucket",
-                          "label": "Inactivity Bucket"
+                          "columnId": "OldestSignIn",
+                          "label": "Oldest Sign-In"
                         },
                         {
                           "columnId": "RecentSignIn",
                           "label": "Most Recent Sign-In"
                         },
                         {
-                          "columnId": "UserId",
-                          "label": "User ID"
+                          "columnId": "DaysSinceRecentSignIn",
+                          "label": "Days Since Most Recent Sign-In"
+                        },
+                        {
+                          "columnId": "InactivityBucket",
+                          "label": "Inactivity Bucket"
                         }
                       ]
                     },
-                    "sortBy": []
+                    "sortBy": [
+                      {
+                        "itemKey": "$gen_thresholds_DaysSinceRecentSignIn_5",
+                        "sortOrder": 2
+                      }
+                    ]
                   },
                   "name": "query - 1"
                 }
