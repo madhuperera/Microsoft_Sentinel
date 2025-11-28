@@ -1,0 +1,230 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "54bd7c5d-7f02-41d2-871f-6d0ff2f578c9",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "W_ReportPeriod",
+                  "label": "Report Period",
+                  "type": 4,
+                  "isRequired": true,
+                  "isGlobal": true,
+                  "typeSettings": {
+                    "selectableValues": [
+                      {
+                        "durationMs": 300000
+                      },
+                      {
+                        "durationMs": 900000
+                      },
+                      {
+                        "durationMs": 1800000
+                      },
+                      {
+                        "durationMs": 3600000
+                      },
+                      {
+                        "durationMs": 14400000
+                      },
+                      {
+                        "durationMs": 43200000
+                      },
+                      {
+                        "durationMs": 86400000
+                      },
+                      {
+                        "durationMs": 172800000
+                      },
+                      {
+                        "durationMs": 259200000
+                      },
+                      {
+                        "durationMs": 604800000
+                      },
+                      {
+                        "durationMs": 1209600000
+                      },
+                      {
+                        "durationMs": 2419200000
+                      },
+                      {
+                        "durationMs": 2592000000
+                      },
+                      {
+                        "durationMs": 5184000000
+                      },
+                      {
+                        "durationMs": 7776000000
+                      }
+                    ],
+                    "allowCustom": false
+                  },
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "value": {
+                    "durationMs": 7776000000
+                  }
+                },
+                {
+                  "id": "411daff2-4b36-4ce7-9b1e-26950d1d2d96",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "W_SPOUrl",
+                  "label": "SharePoint Site",
+                  "type": 2,
+                  "isRequired": true,
+                  "isGlobal": true,
+                  "query": "let _ReportPeriod = 14d;\r\nOfficeActivity\r\n| where TimeGenerated > ago(_ReportPeriod)\r\n| where OfficeWorkload == \"SharePoint\" and UserType == \"Regular\"\r\n| where isnotempty(Site_Url)\r\n| extend Site_Url = trim_end(\"/\", Site_Url)\r\n| project Site_Url | distinct Site_Url\r\n| order by Site_Url asc",
+                  "typeSettings": {
+                    "additionalResourceOptions": [],
+                    "showDefault": false
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces",
+                  "value": "https://qestral.sharepoint.com"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 0"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "### SharePoint Site Usage Report\r\n\r\nThis workbook provides a high-level view of user activity on SharePoint Online sites for the selected reporting period.\r\n\r\n**Report period:** {W_ReportPeriod}  \r\n**Selected SharePoint site:** {W_SPOUrl}\r\n\r\nUse this workbook to:\r\n- See which folders and libraries are being accessed most frequently.\r\n- Identify which user accounts are active on the selected site.\r\n- Spot unusual or unexpected access patterns that may require follow-up.\r\n\r\nActivity counts are based on `OfficeActivity` records where the workload is SharePoint and the user type is Regular.\r\n"
+                  },
+                  "name": "text - 1"
+                }
+              ]
+            },
+            "name": "group - HEADING",
+            "styleSettings": {
+              "margin": "1",
+              "padding": "1",
+              "showBorder": true
+            }
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "### SharePoint Site Activity Summary\r\n\r\nThis report provides an overview of SharePoint Online activity by site for the selected reporting period.\r\n\r\nEach row shows:\r\n- **SiteName** – the full URL of the SharePoint site.\r\n- **ActivityCount** – the number of recorded SharePoint activities for that site.\r\n\r\nOnly regular user accounts (UPN format) are included, and system or service accounts are excluded. Use this view to quickly identify which sites are most active during **{W_ReportPeriod}** across your environment.\r\n"
+                  },
+                  "name": "text - 0"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "OfficeActivity\r\n| where TimeGenerated {W_ReportPeriod}\r\n| where OfficeWorkload == \"SharePoint\" and UserType == \"Regular\"\r\n| where UserId contains \"@\"\r\n| where isnotempty(Site_Url)\r\n| extend Site_Url = trim_end(\"/\", Site_Url)\r\n| summarize ActivityCount = count() by SiteName=Site_Url\r\n| order by ActivityCount desc\r\n",
+                    "size": 0,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "ActivityCount",
+                          "formatter": 8,
+                          "formatOptions": {
+                            "palette": "redDark"
+                          },
+                          "numberFormat": {
+                            "unit": 17,
+                            "options": {
+                              "style": "decimal"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "name": "query - 1"
+                }
+              ]
+            },
+            "name": "group - 3"
+          },
+          {
+            "type": 12,
+            "content": {
+              "version": "NotebookGroup/1.0",
+              "groupType": "editable",
+              "items": [
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "### SharePoint Site Activity by Folder and User\r\n\r\nThis report shows user activity on the selected SharePoint Online site for the chosen reporting period.\r\n\r\nEach row represents a combination of:\r\n- **FolderPath** – the folder or library path within the site.\r\n- **Username** – the user account accessing that location.\r\n- **ActivityCount** – the number of recorded SharePoint activities for that user and folder.\r\n\r\nOnly regular user accounts are included; known system and service accounts are excluded so the focus remains on real user activity. Use this view to identify which areas of the site are most actively used and who is accessing them during **{W_ReportPeriod}** for **{W_SPOUrl}**.\r\n"
+                  },
+                  "name": "text - 1"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "let _SiteUrl = '{W_SPOUrl}';\r\nOfficeActivity\r\n| where TimeGenerated {W_ReportPeriod}\r\n| where OfficeWorkload == \"SharePoint\" and UserType == \"Regular\"\r\n| where Site_Url startswith _SiteUrl\r\n| where UserId contains \"@\"\r\n| summarize ActivityCount = count() by FolderPath=SourceRelativeUrl, Username=UserId\r\n| sort by FolderPath asc",
+                    "size": 3,
+                    "showExportToExcel": true,
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "gridSettings": {
+                      "rowLimit": 500,
+                      "filter": true,
+                      "hierarchySettings": {
+                        "treeType": 1,
+                        "groupBy": [
+                          "FolderPath"
+                        ]
+                      }
+                    }
+                  },
+                  "name": "query - 0"
+                }
+              ]
+            },
+            "name": "group - 1",
+            "styleSettings": {
+              "margin": "1",
+              "padding": "1",
+              "showBorder": true
+            }
+          }
+        ]
+      },
+      "name": "group - MAIN",
+      "styleSettings": {
+        "margin": "1",
+        "padding": "1",
+        "showBorder": true
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/1d4fe854-e01f-484a-bdfa-3e4a5d5b5a4f/resourcegroups/rg-sentinel-prod-australiaeast-001/providers/microsoft.operationalinsights/workspaces/rg-sentinel-prod-australiaeast-001"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
