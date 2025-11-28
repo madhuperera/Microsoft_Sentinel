@@ -74,7 +74,7 @@
                     "durationMs": 86400000
                   },
                   "value": {
-                    "durationMs": 2592000000
+                    "durationMs": 86400000
                   }
                 },
                 {
@@ -180,7 +180,55 @@
                       "valueFontStyle": "xxLarge"
                     }
                   },
+                  "customWidth": "50",
                   "name": "query - 1 - Copy"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "OfficeActivity\r\n| where TimeGenerated {W_ReportPeriod}\r\n| where OfficeWorkload == \"SharePoint\" and UserType == \"Regular\"\r\n| where isnotempty(UserId)\r\n| where UserId contains \"@\"\r\n| where isnotempty(Site_Url)\r\n| project UserId | distinct UserId\r\n| count\r\n",
+                    "size": 4,
+                    "title": "Number of Active Users",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "visualization": "stat",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "ActivityCount",
+                          "formatter": 8,
+                          "formatOptions": {
+                            "palette": "redDark"
+                          },
+                          "numberFormat": {
+                            "unit": 17,
+                            "options": {
+                              "style": "decimal"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "statSettings": {
+                      "valueField": "Count",
+                      "valueAggregation": "None",
+                      "colorSettings": {
+                        "type": "static",
+                        "mode": "background",
+                        "staticColor": "blue",
+                        "heatmapPalette": "greenRed",
+                        "thresholdsGrid": []
+                      },
+                      "iconSettings": {
+                        "thresholdsGrid": []
+                      },
+                      "tagText": "",
+                      "valueFontStyle": "xxLarge"
+                    }
+                  },
+                  "customWidth": "50",
+                  "name": "query - 1 - Copy - Copy"
                 },
                 {
                   "type": 3,
