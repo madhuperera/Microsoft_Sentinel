@@ -74,7 +74,7 @@
                     "durationMs": 86400000
                   },
                   "value": {
-                    "durationMs": 7776000000
+                    "durationMs": 2592000000
                   }
                 },
                 {
@@ -92,7 +92,7 @@
                   },
                   "queryType": 0,
                   "resourceType": "microsoft.operationalinsights/workspaces",
-                  "value": "https://qestral.sharepoint.com"
+                  "value": "https://qestral.sharepoint.com/sites/CoastalView2"
                 }
               ],
               "style": "pills",
@@ -135,6 +135,52 @@
                     "json": "### SharePoint Site Activity Summary\r\n\r\nThis report provides an overview of SharePoint Online activity by site for the selected reporting period.\r\n\r\nEach row shows:\r\n- **SiteName** – the full URL of the SharePoint site.\r\n- **ActivityCount** – the number of recorded SharePoint activities for that site.\r\n\r\nOnly regular user accounts (UPN format) are included, and system or service accounts are excluded. Use this view to quickly identify which sites are most active during **{W_ReportPeriod}** across your environment.\r\n"
                   },
                   "name": "text - 0"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "OfficeActivity\r\n| where TimeGenerated {W_ReportPeriod}\r\n| where OfficeWorkload == \"SharePoint\" and UserType == \"Regular\"\r\n| where UserId contains \"@\"\r\n| where isnotempty(Site_Url)\r\n| extend Site_Url = trim_end(\"/\", Site_Url)\r\n| project Site_Url | distinct Site_Url\r\n| count\r\n",
+                    "size": 4,
+                    "title": "Number of Active Sites",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "visualization": "stat",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "ActivityCount",
+                          "formatter": 8,
+                          "formatOptions": {
+                            "palette": "redDark"
+                          },
+                          "numberFormat": {
+                            "unit": 17,
+                            "options": {
+                              "style": "decimal"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "statSettings": {
+                      "valueField": "Count",
+                      "valueAggregation": "None",
+                      "colorSettings": {
+                        "type": "static",
+                        "mode": "background",
+                        "staticColor": "blue",
+                        "heatmapPalette": "greenRed",
+                        "thresholdsGrid": []
+                      },
+                      "iconSettings": {
+                        "thresholdsGrid": []
+                      },
+                      "tagText": "",
+                      "valueFontStyle": "xxLarge"
+                    }
+                  },
+                  "name": "query - 1 - Copy"
                 },
                 {
                   "type": 3,
@@ -191,6 +237,12 @@
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "FolderPath",
+                          "formatter": 5
+                        }
+                      ],
                       "rowLimit": 500,
                       "filter": true,
                       "hierarchySettings": {
