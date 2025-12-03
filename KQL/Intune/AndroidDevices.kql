@@ -1,0 +1,25 @@
+let MinSupportedAndroidMajor = 12;
+//
+let CurrentAndroidDevices = IntuneDevices
+| where TimeGenerated > ago(90d)
+| where ManagedBy == "Intune" 
+    and DeviceRegistrationState == "Registered"
+    and OS startswith "Android"
+| summarize arg_max(TimeGenerated, *) by DeviceId;
+//
+//
+CurrentAndroidDevices
+| extend AndroidMajor = toint(split(OSVersion, ".")[0])
+| extend OsBucket = 
+    case(
+        isnull(AndroidMajor), "Unknown",
+        AndroidMajor < MinSupportedAndroidMajor, strcat("Unsupported (< ", MinSupportedAndroidMajor, ")"),
+        strcat(AndroidMajor)  // each supported major version gets its own slice
+    )
+| summarize Total = count() by OsBucket
+| order by OsBucket desc
+| render columnchart with (
+    xtitle = "Android OS Version",
+    ytitle = "Number of Devices",
+    title  = "Android Devices by OS Version"
+)

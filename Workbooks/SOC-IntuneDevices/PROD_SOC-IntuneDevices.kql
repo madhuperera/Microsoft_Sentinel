@@ -1,0 +1,416 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "bebb958d-4e64-4814-a96f-6f028f18e901",
+            "cellValue": "tabOS",
+            "linkTarget": "parameter",
+            "linkLabel": "Android",
+            "subTarget": "Android",
+            "style": "link"
+          },
+          {
+            "id": "4717485f-1e6b-4a04-8988-e3ad898854f7",
+            "cellValue": "tabOS",
+            "linkTarget": "parameter",
+            "linkLabel": "iOS",
+            "subTarget": "iOS",
+            "style": "link"
+          },
+          {
+            "id": "5e919922-b695-41ef-8a25-61ee286a3521",
+            "cellValue": "tabOS",
+            "linkTarget": "parameter",
+            "linkLabel": "Windows",
+            "subTarget": "Windows",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "links - NAV"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "### Android OS version overview\r\n\r\nThis tab shows the current Intune-managed Android devices and their OS versions. The bar chart groups devices into OS buckets based on the **Minimum Supported Android Version** parameter, with any device below that threshold shown as **Unsupported**. The table below lists detailed information for each device, including user, OS version, compliance state, ownership, model, and manufacturer, to help identify Android devices that require remediation or upgrade.\r\n",
+              "style": "info"
+            },
+            "name": "text - ANDROIDHEADING"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "cb8c1b63-86f2-4879-a723-f07a3fa58f79",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "W_MinAndroidMajor",
+                  "label": "Minimum Supported Android OS Version",
+                  "type": 1,
+                  "isRequired": true,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "value": "12"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let MinSupportedAndroidMajor = toint('{W_MinAndroidMajor}');\r\n//\r\nlet CurrentAndroidDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"Android\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentAndroidDevices\r\n| extend AndroidMajor = toint(split(OSVersion, \".\")[0])\r\n| extend OsBucket = \r\n    case(\r\n        isnull(AndroidMajor), \"Unknown\",\r\n        AndroidMajor < MinSupportedAndroidMajor, strcat(\"Unsupported (< \", MinSupportedAndroidMajor, \")\"),\r\n        strcat(\"Android \", AndroidMajor)  // each supported major version gets its own slice\r\n    )\r\n| summarize Total = count() by OsBucket\r\n| order by OsBucket asc",
+              "size": 0,
+              "title": "OS Bucket",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "OsBucket",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "Total",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "showLegend": true,
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Unsupported (< 13)",
+                    "color": "red"
+                  }
+                ],
+                "xSettings": {
+                  "label": "OS Major Versions"
+                },
+                "ySettings": {
+                  "label": "Total"
+                }
+              },
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "sizeSettings": "Total",
+                "sizeAggregation": "Sum",
+                "legendMetric": "Total",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "type": "heatmap",
+                  "colorAggregation": "Sum",
+                  "nodeColorField": "Total",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let MinSupportedAndroidMajor = toint('{W_MinAndroidMajor}');\r\n//\r\nlet CurrentAndroidDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"Android\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentAndroidDevices\r\n| extend AndroidMajor = toint(split(OSVersion, \".\")[0])\r\n| where AndroidMajor < MinSupportedAndroidMajor\r\n| project DeviceName, Userprincipalname=UPN, OSVersion, OS, CompliantState, Ownership, ManagedBy, Model, Manufacturer, UserEmail, UserFullName=UserName\r\n",
+              "size": 0,
+              "noDataMessage": "Congratulations! No out of support devices found.",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "name": "query - 2"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "tabOS",
+        "comparison": "isEqualTo",
+        "value": "Android"
+      },
+      "name": "group - ANDROID",
+      "styleSettings": {
+        "margin": "2",
+        "padding": "2",
+        "showBorder": true
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "### iOS and iPadOS version overview\r\n\r\nThis tab shows Intune-managed iPhones and iPads by OS version. The charts use the **Min iOS Version** and **Min iPad Version** parameters to highlight devices that meet the minimum supported versions and those that fall into the **Unsupported** category. The summary counts and device table below provide per-device details so you can quickly identify iOS and iPadOS devices that require upgrades or further investigation.\r\n",
+              "style": "info"
+            },
+            "name": "text - IOSHEADING"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "cb8c1b63-86f2-4879-a723-f07a3fa58f79",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "W_MinIOSMajor",
+                  "label": "Min iOS Version",
+                  "type": 1,
+                  "isRequired": true,
+                  "timeContext": {
+                    "durationMs": 86400000
+                  },
+                  "value": "18"
+                },
+                {
+                  "id": "c0c8fba7-d676-4be7-929f-6a59edf5e151",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "W_MinIPADMajor",
+                  "label": "Min iPad Version",
+                  "type": 1,
+                  "isRequired": true,
+                  "value": "17"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "parameters - 0"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let MinSupportedIOSMajor = toint('{W_MinIOSMajor}');\r\n//\r\nlet CurrentIOSDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"iOS\"\r\n    and Model startswith \"iPhone\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentIOSDevices\r\n| extend IOSMajor = toint(split(OSVersion, \".\")[0])\r\n| extend OsBucket = \r\n    case(\r\n        isnull(IOSMajor), \"Unknown\",\r\n        IOSMajor < MinSupportedIOSMajor, strcat(\"Unsupported (< \", MinSupportedIOSMajor, \")\"),\r\n        strcat(\"iOS \", IOSMajor)  // each supported major version gets its own slice\r\n    )\r\n| summarize Total = count() by OsBucket\r\n| order by OsBucket asc",
+              "size": 0,
+              "title": "iPhones",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "OsBucket",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "Total",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "showLegend": true,
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Unsupported (< 18)",
+                    "color": "red"
+                  }
+                ],
+                "xSettings": {
+                  "label": "OS Major Versions"
+                },
+                "ySettings": {
+                  "label": "Total"
+                }
+              },
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "sizeSettings": "Total",
+                "sizeAggregation": "Sum",
+                "legendMetric": "Total",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "type": "heatmap",
+                  "colorAggregation": "Sum",
+                  "nodeColorField": "Total",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let MinSupportedIOSMajor = toint('{W_MinIPADMajor}');\r\n//\r\nlet CurrentIOSDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"iOS\"\r\n    and Model startswith \"iPad\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentIOSDevices\r\n| extend IOSMajor = toint(split(OSVersion, \".\")[0])\r\n| extend OsBucket = \r\n    case(\r\n        isnull(IOSMajor), \"Unknown\",\r\n        IOSMajor < MinSupportedIOSMajor, strcat(\"Unsupported (< \", MinSupportedIOSMajor, \")\"),\r\n        strcat(\"iPadOS \", IOSMajor)  // each supported major version gets its own slice\r\n    )\r\n| summarize Total = count() by OsBucket\r\n| order by OsBucket asc",
+              "size": 0,
+              "title": "iPads",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "categoricalbar",
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "OsBucket",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "Total",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "showLegend": true,
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Unsupported (< 18)",
+                    "color": "red"
+                  }
+                ],
+                "xSettings": {
+                  "label": "OS Major Versions"
+                },
+                "ySettings": {
+                  "label": "Total"
+                }
+              },
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "sizeSettings": "Total",
+                "sizeAggregation": "Sum",
+                "legendMetric": "Total",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "type": "heatmap",
+                  "colorAggregation": "Sum",
+                  "nodeColorField": "Total",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1 - Copy"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let MinSupportedIOSMajor = toint('{W_MinIOSMajor}');\r\n//\r\nlet CurrentIOSDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"iOS\"\r\n    and Model startswith \"iPhone\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentIOSDevices\r\n| extend IOSMajor = toint(split(OSVersion, \".\")[0])\r\n| where IOSMajor < MinSupportedIOSMajor\r\n| project DeviceName, Userprincipalname=UPN, OSVersion, OS, CompliantState, Ownership, ManagedBy, Model, Manufacturer, UserEmail, UserFullName=UserName\r\n",
+              "size": 0,
+              "noDataMessage": "Congratulations! No out of support devices found.",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "customWidth": "50",
+            "name": "query - 2"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let MinSupportedIOSMajor = toint('{W_MinIPADMajor}');\r\n//\r\nlet CurrentIOSDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"iOS\"\r\n    and Model startswith \"iPad\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentIOSDevices\r\n| extend IOSMajor = toint(split(OSVersion, \".\")[0])\r\n| where IOSMajor < MinSupportedIOSMajor\r\n| project DeviceName, Userprincipalname=UPN, OSVersion, OS, CompliantState, Ownership, ManagedBy, Model, Manufacturer, UserEmail, UserFullName=UserName\r\n",
+              "size": 0,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "customWidth": "50",
+            "name": "query - 2 - Copy"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "tabOS",
+        "comparison": "isEqualTo",
+        "value": "iOS"
+      },
+      "name": "group - IOS",
+      "styleSettings": {
+        "margin": "2",
+        "padding": "2",
+        "showBorder": true
+      }
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 1,
+            "content": {
+              "json": "### Windows OS build overview\r\n\r\nThis tab summarises Intune-managed Windows devices by OS generation (Windows 10 or Windows 11) and major build number, including the total number of devices on each build. Use this view to identify where devices are concentrated on legacy or current builds and to prioritise upgrade planning. For detailed support and end-of-life dates for each Windows release, refer to the Windows lifecycle information on [endoflife.date](https://endoflife.date/windows).\r\n",
+              "style": "info"
+            },
+            "name": "text - WINDOWSHEADING"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let CurrentWindowsDevices =\r\nIntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\"\r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"Windows\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\nCurrentWindowsDevices\r\n| extend VersionParts = split(OSVersion, \".\")\r\n       // e.g. \"10.0.26100.1234\" -> [\"10\",\"0\",\"26100\",\"1234\"]\r\n| extend WinBuild = toint(iff(array_length(VersionParts) >= 3, VersionParts[2], \"\"))\r\n| extend OsGeneration = case(\r\n        isnull(WinBuild),                              \"Unknown\",\r\n        WinBuild >= 22000,                             \"Windows 11\",\r\n        WinBuild >= 19000 and WinBuild < 22000,        \"Windows 10\",\r\n        \"Other Windows\"\r\n    )\r\n| summarize Total = count() by OsGeneration, WinBuild\r\n| order by OsGeneration asc, WinBuild asc\r\n",
+              "size": 0,
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "name": "query - 0"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "tabOS",
+        "comparison": "isEqualTo",
+        "value": "Windows"
+      },
+      "name": "group - WINDOWS",
+      "styleSettings": {
+        "margin": "2",
+        "padding": "2",
+        "showBorder": true
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/a9f8b903-a28f-4da7-8654-06c612beb9a9/resourcegroups/rg-sentinel-prod-australiaeast-001/providers/microsoft.operationalinsights/workspaces/log-sentinel-prod-australiaeast-001"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
