@@ -139,6 +139,7 @@
               "query": "let MinSupportedAndroidMajor = toint('{W_MinAndroidMajor}');\r\n//\r\nlet CurrentAndroidDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"Android\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentAndroidDevices\r\n| extend AndroidMajor = toint(split(OSVersion, \".\")[0])\r\n| where AndroidMajor < MinSupportedAndroidMajor\r\n| project DeviceName, Userprincipalname=UPN, OSVersion, OS, CompliantState, Ownership, ManagedBy, Model, Manufacturer, UserEmail, UserFullName=UserName\r\n",
               "size": 0,
               "noDataMessage": "Congratulations! No out of support devices found.",
+              "showExportToExcel": true,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "table"
