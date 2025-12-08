@@ -334,6 +334,7 @@
               "query": "let MinSupportedIOSMajor = toint('{W_MinIOSMajor}');\r\n//\r\nlet CurrentIOSDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"iOS\"\r\n    and Model startswith \"iPhone\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentIOSDevices\r\n| extend IOSMajor = toint(split(OSVersion, \".\")[0])\r\n| where IOSMajor < MinSupportedIOSMajor\r\n| project DeviceName, Userprincipalname=UPN, OSVersion, OS, CompliantState, Ownership, ManagedBy, Model, Manufacturer, UserEmail, UserFullName=UserName\r\n",
               "size": 0,
               "noDataMessage": "Congratulations! No out of support devices found.",
+              "showExportToExcel": true,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "table"
@@ -347,6 +348,7 @@
               "version": "KqlItem/1.0",
               "query": "let MinSupportedIOSMajor = toint('{W_MinIPADMajor}');\r\n//\r\nlet CurrentIOSDevices = IntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\" \r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"iOS\"\r\n    and Model startswith \"iPad\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\n//\r\nCurrentIOSDevices\r\n| extend IOSMajor = toint(split(OSVersion, \".\")[0])\r\n| where IOSMajor < MinSupportedIOSMajor\r\n| project DeviceName, Userprincipalname=UPN, OSVersion, OS, CompliantState, Ownership, ManagedBy, Model, Manufacturer, UserEmail, UserFullName=UserName\r\n",
               "size": 0,
+              "showExportToExcel": true,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "table"
@@ -400,6 +402,7 @@
               "version": "KqlItem/1.0",
               "query": "let CurrentWindowsDevices =\r\nIntuneDevices\r\n| where TimeGenerated > ago(90d)\r\n| where isnotempty(OS)\r\n| where ManagedBy == \"Intune\"\r\n    and DeviceRegistrationState == \"Registered\"\r\n    and OS startswith \"Windows\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceId;\r\n//\r\nCurrentWindowsDevices\r\n| extend VersionParts = split(OSVersion, \".\")\r\n       // e.g. \"10.0.26100.1234\" -> [\"10\",\"0\",\"26100\",\"1234\"]\r\n| extend WinBuild = toint(iff(array_length(VersionParts) >= 3, VersionParts[2], \"\"))\r\n| extend OsGeneration = case(\r\n        isnull(WinBuild),                              \"Unknown\",\r\n        WinBuild >= 22000,                             \"Windows 11\",\r\n        WinBuild >= 19000 and WinBuild < 22000,        \"Windows 10\",\r\n        \"Other Windows\"\r\n    )\r\n| project DeviceName, StaffMember=UserName, WinBuild, OsGeneration, OSVersion, SerialNumber, Manufacturer\r\n",
               "size": 0,
+              "showExportToExcel": true,
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "table",
