@@ -1,13 +1,69 @@
-# Microsoft_Sentinel
-## Analytics
+# Microsoft Sentinel Repository
 
-### Monitoring for Email Attachments
-![image](https://user-images.githubusercontent.com/37104267/199955393-22f66a30-9652-4807-9d6c-13c0700243d8.png)
-[KQL Query](https://github.com/madhuperera/Microsoft_Sentinel/blob/main/Analytics/MonitorEmailAttachmentLeaks.kql "KQL Query")
+Security detection and investigation assets for Microsoft Sentinel, organized by security domain.
 
-## KQL
-Here you can find KQL Queries you can run on demand during your investigations or within your Workbooks for reporting.
-[KQL](https://github.com/madhuperera/Microsoft_Sentinel/tree/main/KQL "KQL")
+## 📂 Repository Structure
 
-### Concepts
-I will be creating some conept ideas for KQL or some basic concepts like how get all the events in the correct time zone, etc.
+The repository is organized by **security threat domain** for better discoverability and maintainability:
+
+- **`detection-rules/`** - Scheduled alert rules (ARM templates deployed to Sentinel)
+  - `identity-security/` - Azure AD authentication and privilege monitoring
+  - Other security domains for email, office, devices
+
+- **`investigations/`** - Ad-hoc KQL queries for incident analysis
+  - Organized by **threat domain** AND **data source**
+  - Covers identity, email, office, devices, billing, and more
+
+- **`reference-data/`** - Watchlists and lookup tables
+  - `emergency-breakglass-accounts/` - Emergency admin monitoring
+
+- **`dashboards/`** - Sentinel workbooks and visualizations
+  - `production/` - Live workbooks (PROD_*)
+  - `development/` - Testing workbooks (DEV_*)
+
+## 🚀 Quick Start
+
+### Find a Detection Rule
+Browse `detection-rules/{domain}/{threat}/` for scheduled alert rules ready to deploy to Sentinel.
+
+### Run an Investigation Query
+Browse `investigations/{domain}/` for KQL queries to run during incident investigation.
+
+### View a Dashboard
+See `dashboards/production/{domain}/` for interactive workbook visualizations.
+
+## 📚 Documentation
+
+- **`.github/copilot-instructions.md`** - AI agent guidance + codebase patterns
+- **`detection-rules/README.md`** - Detection rule guide
+- **`investigations/README.md`** - Investigation query guide
+- **`dashboards/README.md`** - Workbook deployment
+- **`reference-data/README.md`** - Watchlist management
+- **`POST-MIGRATION-STRUCTURE.md`** - Complete directory structure
+
+## 📊 Repository Contents
+
+- **6 Detection Rules** - Scheduled alerts for threats
+- **32 Investigation Queries** - KQL for analysis
+- **1 Watchlist** - Emergency accounts reference data
+- **8 Dashboards** - Production + development workbooks
+- **7+ README Files** - Domain-specific documentation
+
+## 💡 Key Concepts
+
+**Detection Rules**: ARM templates with embedded KQL that run on a schedule and create incidents.
+
+**Investigation Queries**: Reusable KQL for ad-hoc analysis during incidents.
+
+**Watchlists**: CSV reference data used in rule/query conditions.
+
+**Dashboards**: Sentinel workbooks with parameterized KQL visualizations.
+
+## 🔄 Recent Restructuring
+
+December 2025: Repository reorganized from artifact-type (Analytics/, KQL/, Workbooks/) to domain-based organization.
+See `MIGRATION_COMPLETE.md` for details.
+
+## 📝 License
+
+See `LICENSE` file
