@@ -59,11 +59,96 @@ See `dashboards/production/{domain}/` for interactive workbook visualizations.
 
 **Dashboards**: Sentinel workbooks with parameterized KQL visualizations.
 
-## 🔄 Recent Restructuring
+# Microsoft Sentinel
 
-December 2025: Repository reorganized from artifact-type (Analytics/, KQL/, Workbooks/) to domain-based organization.
-See `MIGRATION_COMPLETE.md` for details.
+Security detection and investigation assets for Microsoft Sentinel — organized by security domain for clarity and maintenance.
 
-## 📝 License
+## Table of contents
 
-See `LICENSE` file
+- Repository structure
+- Quick start
+- Prerequisites & deploy examples
+- Maintainers & support
+- Notes on generated content
+- Documentation and links
+- License
+
+## Repository structure
+
+Top-level directories (high level):
+
+- `detection-rules/` — Scheduled alert rules (ARM templates) organized by domain (e.g. `identity-security/`).
+- `investigations/` — Reusable KQL queries for ad-hoc analysis, organized by domain and data source.
+- `reference-data/` — Watchlists and lookup tables (each watchlist has its own folder and README).
+- `dashboards/` — Sentinel workbooks, separated into `production/` and `development/`.
+
+For the full, current tree and a snapshot of contents see `POST-MIGRATION-STRUCTURE.md`.
+
+## Quick start
+
+- Find detection rules: `detection-rules/{domain}/{threat}/`
+- Run an investigation query: `investigations/{domain}/` (paste `.kql` into Sentinel Logs)
+- View a dashboard: `dashboards/production/{domain}/`
+
+## Prerequisites & deploy example
+
+Minimum requirements for deploying templates and workbooks:
+
+- Azure CLI (latest)
+- Logged in: `az login`
+- Permissions: Contributor on target resource group + appropriate Sentinel workspace permissions
+
+Example: deploy an ARM template for a detection rule (PowerShell example):
+
+```powershell
+az deployment group create \
+  --resource-group <rg-name> \
+  --template-file detection-rules/identity-security/conditional-access/ca-changes-afterhours.json \
+  --parameters workspace=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace-name>
+```
+
+Notes:
+
+- Importing workbooks is easiest via the Azure portal (Sentinel → Workbooks → Add). CLI import support varies by extension/version.
+- If you plan automation, standardize parameter values and use CI to validate templates before deployment.
+
+## Maintainers & support
+
+- Repo owner: GitHub user `madhuperera` (see repository settings for team/contacts).
+- For questions or to request changes: open a GitHub Issue in this repository.
+- To propose edits: create a branch and open a pull request; include test/deployment notes in the PR description.
+
+If you want specific team contact details added here, tell me what to include.
+
+## Notes on generated content
+
+Some files in this repository were generated or assisted by language models. Treat these as drafts — review and test queries and templates before promoting to production. Examples of files to review first:
+
+- `investigations/*` (many KQL files)
+- `detection-rules/*` (ARM templates exported from workbooks)
+
+See domain README files for more context and a note when a file was flagged as generated.
+
+## Documentation and direct links
+
+Key README files:
+
+- `detection-rules/README.md` — detection rule guidance
+- `detection-rules/identity-security/README.md` — identity security context
+- `investigations/README.md` — using and authoring KQL queries
+- `reference-data/README.md` — watchlist lifecycle and format
+- `reference-data/emergency-breakglass-accounts/README.md` — emergency accounts watchlist
+- `.github/copilot-instructions.md` — AI agent guidance and conventions
+
+For a complete snapshot of directories and files, see `POST-MIGRATION-STRUCTURE.md`.
+
+## License
+
+See the `LICENSE` file in the repository root for licensing terms.
+
+----
+
+If you want, I can also:
+
+- add a short table of contents with anchors, or
+- include example automation scripts for CI-based deployment.
