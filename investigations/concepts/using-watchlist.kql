@@ -1,0 +1,3 @@
+let EntraIDTenantList = _GetWatchlist("entraidtenantlist")
+| project TenantID, OrganizationName, DefaultDomainName, TenantRegionScope, TenantRegionSubScope;
+EntraIDTenantList
