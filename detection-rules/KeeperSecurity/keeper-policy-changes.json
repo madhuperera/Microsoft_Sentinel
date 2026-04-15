@@ -1,0 +1,62 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b1901493-c21f-4c3e-bb6d-b645574691c2')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b1901493-c21f-4c3e-bb6d-b645574691c2')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "SOC-High-KeeperSecurity-PolicyChanges",
+                "description": "This rule detects changes made to policies within KeeperSecurity, such as enforcement policy modifications, role policy updates, or security setting changes. Unauthorized policy changes in a password management platform could indicate privilege escalation, defense evasion, or an attacker attempting to weaken security controls. The rule triggers an incident to ensure immediate investigation of potential misuse of administrative privileges.",
+                "severity": "High",
+                "enabled": true,
+                "query": "let ClientTimeZone = \"Pacific/Auckland\"; //New Zealand Time Zone\r\nlet ReportPeriod = 24h;\r\nKeeperSecurityEventNewLogs_CL\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| where Category startswith \"configuration\"\r\n| project AuditTime=NZTime, Operation=AuditEvent, ClientIP=RemoteAddress, Category, User=Username",
+                "queryFrequency": "P1D",
+                "queryPeriod": "PT25H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "DefenseEvasion",
+                    "CommandAndControl"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT12H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

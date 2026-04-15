@@ -1,0 +1,7 @@
+let ClientTimeZone = "Pacific/Auckland"; //New Zealand Time Zone
+let ReportPeriod = 24h;
+KeeperSecurityEventNewLogs_CL
+| where TimeGenerated > ago(ReportPeriod)
+| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)
+| where Category startswith "configuration"
+| project AuditTime=NZTime, Operation=AuditEvent, ClientIP=RemoteAddress, Category, User=Username
