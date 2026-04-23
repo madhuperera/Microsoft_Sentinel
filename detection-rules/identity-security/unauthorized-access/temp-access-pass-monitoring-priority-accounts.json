@@ -8,17 +8,17 @@
     },
     "resources": [
         {
-            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/33e27ba5-bdd6-4abb-a6c7-7637053fc826')]",
-            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/33e27ba5-bdd6-4abb-a6c7-7637053fc826')]",
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9f5b2d7c-1a3e-4c8f-bd2a-7e6f4c1a9b21')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9f5b2d7c-1a3e-4c8f-bd2a-7e6f4c1a9b21')]",
             "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
             "kind": "Scheduled",
             "apiVersion": "2023-12-01-preview",
             "properties": {
-                "displayName": "SOC-Informational-UnauthorizedAccess-TemporaryAccessPassMonitoingByAdmin",
-                "description": "This rule detects instances where an admin has registered a Temporary Access Pass (TAP) for a user. TAPs are a form of temporary authentication that can be used for passwordless sign-in or onboarding users. While this is a legitimate process, unauthorized or unexpected TAP registrations may indicate potential misuse of privileged accounts or lateral movement attempts.",
-                "severity": "Informational",
+                "displayName": "SOC-High-UnauthorizedAccess-TemporaryAccessPassMonitoingByAdmin-PriorityAccounts",
+                "description": "This rule detects instances where an admin has registered a Temporary Access Pass (TAP) for a user listed in the PriorityAccounts watchlist (e.g. executives, vCISO, privileged identities). TAP registrations against priority accounts are high-impact events and may indicate misuse of privileged accounts, account takeover preparation, or lateral movement attempts. Watchlist source: reference-data/priority-accounts/priority-accounts.csv (alias: PriorityAccounts, key column: UPN).",
+                "severity": "High",
                 "enabled": true,
-                "query": "let ReportPeriod = 2h;\r\nlet ClientTimeZone = \"Pacific/Auckland\"; // New Zealand Time Zone\r\nAuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where LoggedByService == \"Authentication Methods\"\r\n| where Category == \"UserManagement\" and ActivityDisplayName =~ \"Admin registered security info\" and ResultReason =~ \"Admin registered temporary access pass method for user\"\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| extend InitiatedByUsername = tostring(InitiatedBy.user.userPrincipalName)\r\n| extend TargetUserDisplayName = tostring(TargetResources[0].displayName)\r\n| extend TargetUsername = tostring(TargetResources[0].userPrincipalName)\r\n| extend InitiatedByUserDisplayName = Identity\r\n| extend InitiatedByIP = tostring(InitiatedBy.user.ipAddress)\r\n| project TimeGenerated, NZTime, InitiatedByUserDisplayName, InitiatedByUsername, InitiatedByIP, TargetUserDisplayName, TargetUsername, ResultReason\r\n| order by TimeGenerated desc",
+                "query": "let ReportPeriod = 2h;\r\nlet ClientTimeZone = \"Pacific/Auckland\"; // New Zealand Time Zone\r\nlet PriorityAccounts = (_GetWatchlist(\"PriorityAccounts\") | project UPN = tolower(tostring(UPN)));\r\nAuditLogs\r\n| where TimeGenerated > ago(ReportPeriod)\r\n| where LoggedByService == \"Authentication Methods\"\r\n| where Category == \"UserManagement\" and ActivityDisplayName =~ \"Admin registered security info\" and ResultReason =~ \"Admin registered temporary access pass method for user\"\r\n| extend NZTime = datetime_utc_to_local(TimeGenerated, ClientTimeZone)\r\n| extend InitiatedByUsername = tostring(InitiatedBy.user.userPrincipalName)\r\n| extend TargetUserDisplayName = tostring(TargetResources[0].displayName)\r\n| extend TargetUsername = tostring(TargetResources[0].userPrincipalName)\r\n| extend InitiatedByUserDisplayName = Identity\r\n| extend InitiatedByIP = tostring(InitiatedBy.user.ipAddress)\r\n| where tolower(TargetUsername) in (PriorityAccounts)\r\n| project TimeGenerated, NZTime, InitiatedByUserDisplayName, InitiatedByUsername, InitiatedByIP, TargetUserDisplayName, TargetUsername, ResultReason\r\n| order by TimeGenerated desc",
                 "queryFrequency": "PT2H",
                 "queryPeriod": "PT2H",
                 "triggerOperator": "GreaterThan",
