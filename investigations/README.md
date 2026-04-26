@@ -13,8 +13,12 @@ Ad-hoc KQL queries for manual analysis and investigation of security incidents.
 - **email-security/** - Exchange activity and email threat analysis
   - attachment-controls/ - Email attachment patterns
 - **office-anomalies/** - SharePoint, Teams, OneDrive activity
-- **device-security/** - Device logon and file activity
+- **device-security/** - Device logon, file activity, and Defender XDR endpoint hunts
   - intune/ - Intune-managed device analysis
+  - defender-health/ - Microsoft Defender for Endpoint platform / engine version hunts
+  - asr-rules/ - Attack Surface Reduction rule audit / block events
+  - macros/ - Office macro execution and trust-record changes
+  - certificates/ - Certificate inventory hunts (e.g. expiring certs by domain)
 - **billing-analysis/** - Data ingestion costs by table/source
 - **guest-access/** - Guest user activity
 - **keeper-security/** - Keeper password manager activity
