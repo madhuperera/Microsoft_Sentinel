@@ -57,6 +57,7 @@ The repository is organized by **security domain** with related detection rules,
 3. **Entity Extraction** - Use `extend` to create queryable fields for MITRE ATT&CK mapping
 4. **Data Filtering** - Apply domain/user/category filters via dynamic lists
 5. **Time Windows** - Queries typically look back 1-2 hours (via `queryFrequency`/`queryPeriod`)
+6. **No bare blank lines** - `.kql` files in this repo must not contain empty lines between statements. Use a comment marker (`//` on its own line, optionally `//` followed by a heading) as the visual separator. Bare blank lines break some Sentinel/workbook query hosts that treat consecutive newlines as a query boundary.
 
 ### Alert Rule JSON Template Structure (Detection Rules)
 - **Required Properties**: `displayName`, `description`, `severity`, `query`, `queryFrequency`, `queryPeriod`
