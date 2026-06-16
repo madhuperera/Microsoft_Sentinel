@@ -1,0 +1,162 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Microsoft 365 Activity — User vs Organisation (Model B)\n\n> ⚠️ **Observable telemetry only.** These figures are **not** a measure of productivity, work quality, effort, or hours worked. A higher count does not mean more work was done. Outliers are **prompts to review**, never proof of underperformance or misconduct. The primary model is each user vs their *own* baseline; this view is supporting context only.\n\nThis workbook compares each user's per-workload activity against the organisation using **robust statistics** (median, MAD, percentiles, modified z-score), so the comparison isn't skewed by power users, automation, or service accounts. Service accounts, system principals, and B2B guests are excluded."
+      },
+      "name": "text - title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "42b0420d-b689-4f23-a22d-26ad1722af24",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_ReportPeriod",
+            "label": "Report period",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\": \"7d\", \"label\": \"Last 7 days\"}, {\"value\": \"14d\", \"label\": \"Last 14 days\"}, {\"value\": \"30d\", \"label\": \"Last 30 days\", \"selected\": true}, {\"value\": \"60d\", \"label\": \"Last 60 days\"}, {\"value\": \"90d\", \"label\": \"Last 90 days\"}]",
+            "value": "30d"
+          },
+          {
+            "id": "a7e2ba82-78c8-4841-9ac3-c2b41fb1a66f",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_MinUserActivity",
+            "label": "Min activity (events) to include a user",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\": \"1\", \"label\": \"1\"}, {\"value\": \"5\", \"label\": \"5\", \"selected\": true}, {\"value\": \"10\", \"label\": \"10\"}, {\"value\": \"20\", \"label\": \"20\"}]",
+            "value": "5"
+          },
+          {
+            "id": "5a9759eb-05da-4f8a-998f-14dfa7a00207",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_OutlierZ",
+            "label": "Outlier threshold (|modified z|)",
+            "type": 2,
+            "isRequired": true,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[{\"value\": \"2.5\", \"label\": \"2.5\"}, {\"value\": \"3\", \"label\": \"3.0\"}, {\"value\": \"3.5\", \"label\": \"3.5\", \"selected\": true}, {\"value\": \"4\", \"label\": \"4.0\"}]",
+            "value": "3.5"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - controls"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### Organisation baseline per workload\nWhat “normal” looks like across the org for each workload over **{W_ReportPeriod}**: the median per-day event rate, the P25–P90 spread, and MAD (robust spread). `Users` is how many people the stats rest on — small counts are less reliable. These are the reference figures the table below compares each user against."
+      },
+      "name": "text - orgstats"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let ReportPeriod = {W_ReportPeriod};\nlet EndTime = now();\nlet CurrentStart = EndTime - ReportPeriod;\nlet ReportDays = ReportPeriod / 1d;\nlet MinUserActivity = {W_MinUserActivity};\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet PerUser = OfficeActivity\n| where TimeGenerated >= CurrentStart and TimeGenerated < EndTime\n| where UserType == 'Regular'\n| where Operation in (MeaningfulOps)\n| extend UPN = tolower(tostring(UserId))\n| where UPN !contains '#ext#'\n| where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)\n| summarize Events = count() by UPN, Workload = tostring(OfficeWorkload)\n| where Events >= MinUserActivity\n| extend GroupKey = 'All', EventsPerDay = round(todouble(Events) / ReportDays, 2);\nlet Medians = PerUser | summarize Median = percentile(EventsPerDay, 50) by GroupKey, Workload;\nlet MAD = PerUser | join kind=inner Medians on GroupKey, Workload | extend AbsDev = abs(EventsPerDay - Median) | summarize MAD = percentile(AbsDev, 50) by GroupKey, Workload;\nPerUser\n| summarize Users = dcount(UPN), Median = round(percentile(EventsPerDay, 50), 2), P25 = round(percentile(EventsPerDay, 25), 2), P75 = round(percentile(EventsPerDay, 75), 2), P90 = round(percentile(EventsPerDay, 90), 2) by GroupKey, Workload\n| join kind=inner MAD on GroupKey, Workload\n| project Workload, Users, Median, P25, P75, P90, MAD = round(MAD, 2)\n| order by Workload asc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Median",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            },
+            {
+              "columnMatch": "Users",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "gray"
+              }
+            }
+          ],
+          "filter": true
+        }
+      },
+      "name": "query - orgstats"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### User vs organisation\nEach row places a user's per-workload rate against the org distribution above. **Read `PercentileBand` first** (where they sit vs peers); `ModifiedZ` is the robust statistical distance from the median. `OrgFlag` highlights rows where |modified z| > **{W_OutlierZ}** — amber means *worth a look*, not a verdict. Use the column filters to focus on a workload or on outliers. Different roles legitimately produce different bands."
+      },
+      "name": "text - uservsorg"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let ReportPeriod = {W_ReportPeriod};\nlet EndTime = now();\nlet CurrentStart = EndTime - ReportPeriod;\nlet ReportDays = ReportPeriod / 1d;\nlet MinUserActivity = {W_MinUserActivity};\nlet OutlierZ = {W_OutlierZ};\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet PerUser = OfficeActivity\n| where TimeGenerated >= CurrentStart and TimeGenerated < EndTime\n| where UserType == 'Regular'\n| where Operation in (MeaningfulOps)\n| extend UPN = tolower(tostring(UserId))\n| where UPN !contains '#ext#'\n| where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)\n| summarize Events = count() by UPN, Workload = tostring(OfficeWorkload)\n| where Events >= MinUserActivity\n| extend GroupKey = 'All', EventsPerDay = round(todouble(Events) / ReportDays, 2);\nlet Stats = PerUser | summarize Median = percentile(EventsPerDay, 50), P25 = percentile(EventsPerDay, 25), P75 = percentile(EventsPerDay, 75), P90 = percentile(EventsPerDay, 90) by GroupKey, Workload;\nlet MAD = PerUser | join kind=inner Stats on GroupKey, Workload | extend AbsDev = abs(EventsPerDay - Median) | summarize MAD = percentile(AbsDev, 50) by GroupKey, Workload;\nlet UserList = SigninLogs | where TimeGenerated >= CurrentStart | where UserType =~ 'Member' | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName) | project UPN, UserDisplayName;\nPerUser\n| join kind=inner Stats on GroupKey, Workload\n| join kind=inner MAD on GroupKey, Workload\n| extend ModifiedZ = iff(MAD == 0, 0.0, round(0.6745 * (EventsPerDay - Median) / MAD, 2))\n| extend PercentileBand = case(EventsPerDay < P25, 'Below P25 (low vs peers)', EventsPerDay < Median, 'P25-P50', EventsPerDay < P75, 'P50-P75', EventsPerDay < P90, 'P75-P90', 'Above P90 (high vs peers)')\n| extend OrgFlag = iff(abs(ModifiedZ) > OutlierZ, 'Outlier - review only', 'Typical')\n| join kind=leftouter UserList on UPN\n| where isnotempty(UserDisplayName)\n| project UserDisplayName, UPN, Workload, UserEventsPerDay = EventsPerDay, GroupMedian = round(Median, 2), PercentileBand, ModifiedZ, OrgFlag\n| order by Workload asc, ModifiedZ desc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "OrgFlag",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Outlier - review only",
+                    "representation": "orange",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "green",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            },
+            {
+              "columnMatch": "UserEventsPerDay",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "rowLimit": 1000,
+          "filter": true
+        }
+      },
+      "name": "query - uservsorg"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/1d4fe854-e01f-484a-bdfa-3e4a5d5b5a4f/resourcegroups/rg-sentinel-prod-australiaeast-001/providers/microsoft.operationalinsights/workspaces/rg-sentinel-prod-australiaeast-001"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

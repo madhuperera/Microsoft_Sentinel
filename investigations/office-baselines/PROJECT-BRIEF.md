@@ -1,8 +1,9 @@
 # Project Brief — Microsoft 365 Activity Baseline Reporting
 
-> **Status:** Phase 1 — KQL foundation, documentation, and taxonomy.
-> **Workbook/dashboard:** *Not in scope yet.* Deferred until queries, assumptions,
-> taxonomy, and comparison methods are validated.
+> **Status:** Phase 1 complete (KQL foundation, documentation, taxonomy). Phase 2
+> started — first workbook drafted (Model B, user vs organisation).
+> **Workbook/dashboard:** First draft built (`workbooks/DEV_OfficeBaselines-UserVsOrg.json`).
+> Drafts are unvalidated until imported and checked against live data.
 >
 > This file is the reusable, living brief for the project. It is intended to be
 > portable: drop it into another Claude project, Claude Code session, or repo and
@@ -132,6 +133,9 @@ investigations/office-baselines/
 │   └── drilldown/                    · underlying-event review
 │       ├── 09-user-event-drilldown.kql
 │       └── 10-workload-operation-breakdown.kql
+├── workbooks/                        · Phase 2 — Sentinel workbook JSON (DEV_ = draft)
+│   ├── README.md                     · import steps + validation checklist
+│   └── DEV_OfficeBaselines-UserVsOrg.json   · Model B (queries 06+07)
 └── (taxonomy watchlist source lives in reference-data/office-activity-taxonomy/)
 ```
 
@@ -140,6 +144,12 @@ investigations/office-baselines/
 Newest first. Each entry records guidance that shaped the project so the direction,
 assumptions, constraints, and principles stay current.
 
+- **2026-06-16** (update) — Phase 2 started. Built the **first workbook** from
+  scratch (no external sample), around queries `06`+`07` (Model B, user vs org):
+  `workbooks/DEV_OfficeBaselines-UserVsOrg.json`. Parameters `W_ReportPeriod`,
+  `W_MinUserActivity`, `W_OutlierZ`; `OrgFlag` conditional formatting; grid filters.
+  Generated programmatically for valid JSON escaping. Client chose "design from
+  scratch" + first workbook around query 07. Status: draft pending live validation.
 - **2026-06-16** (update) — Added a per-query step-by-step companion doc
   (`NN-*.md`) next to every `NN-*.kql` explaining its logic, parameters, and output.
 - **2026-06-16** (update) — Excluded accounts with an empty `UserDisplayName` (not
