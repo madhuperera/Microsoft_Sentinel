@@ -136,6 +136,11 @@ A user is flagged as an outlier for a workload when:
 - `OfficeActivity.UserId` and `SigninLogs.UserPrincipalName` both generally hold the
   UPN. We join on `tolower(UPN)` to be case-safe.
 - Display names are sourced from `SigninLogs` (most reliable of the three tables).
+- **Guests are excluded.** In `OfficeActivity`, `UserType == "Regular"` does *not*
+  exclude guests (it only separates Regular from Admin/System/Application/Service-
+  Principal), so guests are removed by dropping UPNs containing `#EXT#`. The
+  `SigninLogs` member filter alone is insufficient because it is used only for a
+  left-outer display-name lookup, which keeps unmatched (guest) metric rows.
 
 ## 6. Parameters (single source of truth in `00-config-and-shared-taxonomy.kql`)
 

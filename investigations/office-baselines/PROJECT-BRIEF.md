@@ -133,6 +133,11 @@ investigations/office-baselines/
 Newest first. Each entry records guidance that shaped the project so the direction,
 assumptions, constraints, and principles stay current.
 
+- **2026-06-16** (update) — Excluded B2B guests from all OfficeActivity-based
+  queries. `UserType == "Regular"` does not filter guests; they were appearing
+  (with blank display names) because the SigninLogs member filter only fed a
+  left-outer name lookup. Added `where UPN !contains "#ext#"` to queries 01, 02,
+  03, 05, 06, 07, 08, 10.
 - **2026-06-16** (update) — Made service-account watchlist references resilient:
   all queries now use `union isfuzzy=true` so a missing `service-accounts` watchlist
   degrades to no exclusions instead of erroring. Also fixed two review findings:

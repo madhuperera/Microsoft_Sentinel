@@ -28,8 +28,12 @@
   `UPN` column will still error; an empty watchlist applies no exclusions.
 - `OfficeActivity.UserId` and `SigninLogs.UserPrincipalName` hold the UPN and can be
   joined on `tolower(...)`.
-- `UserType == "Regular"` (OfficeActivity) and `UserType == "Member"` (SigninLogs)
-  isolate human, non-guest accounts well enough for a first pass.
+- `UserType == "Regular"` (OfficeActivity) isolates normal users from
+  Admin/System/Application/ServicePrincipal — **but it does NOT exclude guests**
+  (B2B guests are also "Regular"). Guests are therefore excluded separately by
+  dropping UPNs containing the `#EXT#` marker (`where UPN !contains "#ext#"`).
+  `UserType =~ "Member"` (SigninLogs) excludes guests natively there.
+- B2B guest accounts are assumed to carry the standard `#EXT#` marker in their UPN.
 - The taxonomy in `docs/activity-taxonomy.md` is a reasonable first cut of meaningful
   operations for a typical tenant.
 - Calendar-day normalisation is acceptable (working-day calendar not yet applied).

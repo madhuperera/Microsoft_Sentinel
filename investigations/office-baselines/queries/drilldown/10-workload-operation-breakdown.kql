@@ -61,6 +61,10 @@ OfficeActivity
 | where TimeGenerated >= ago(LookbackPeriod)
 | where UserType == "Regular"
 | extend UPN = tolower(tostring(UserId))
+// Exclude external / B2B guests: OfficeActivity UserType "Regular" includes guests
+// (it only separates Regular from Admin/System/App). Guest UPNs carry the "#EXT#"
+// marker. Remove this line if you want guests included.
+| where UPN !contains "#ext#"
 | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
 | summarize Events = count(), Users = dcount(UPN)
     by Workload = tostring(OfficeWorkload), Operation

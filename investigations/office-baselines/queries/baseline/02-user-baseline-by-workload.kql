@@ -43,6 +43,10 @@ let WorkloadMetrics = (winStart:datetime, winEnd:datetime, days:real) {
     | where UserType == "Regular"
     | where Operation in (MeaningfulOps)
     | extend UPN = tolower(tostring(UserId))
+    // Exclude external / B2B guests: OfficeActivity UserType "Regular" includes
+    // guests (it only separates Regular from Admin/System/App). Guest UPNs carry
+    // the "#EXT#" marker. Remove this line if you want guests included.
+    | where UPN !contains "#ext#"
     | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
     | summarize Events = count(), ActiveDays = dcount(bin(TimeGenerated, 1d))
         by UPN, Workload = tostring(OfficeWorkload)
