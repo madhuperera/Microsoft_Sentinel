@@ -1,0 +1,69 @@
+// =============================================================================
+// 05 - Users flagged for review  [MODEL A - review list]
+// -----------------------------------------------------------------------------
+// Purpose
+//   The actionable shortlist: users whose active-day ratio moved OUTSIDE the
+//   normal band vs their own baseline, with low-confidence baselines suppressed.
+//   This is identical logic to query 01, filtered to the rows worth a human look.
+//
+// Output : one row per flagged user — direction, magnitude, and the numbers
+//          behind it. Sorted by magnitude of change.
+//
+//   "Flagged" means "worth asking a question about", NOT a finding of wrongdoing
+//   or underperformance. Always pair with context (leave, role change, projects).
+//
+// Data sources : OfficeActivity (metrics), SigninLogs (display names)
+//
+// ⚠ Observable telemetry only. NOT a productivity measure. Review signals only.
+//   See docs/assumptions-and-limitations.md.
+// =============================================================================
+//
+let ReportPeriod      = 30d;
+let BaselinePeriod    = 30d;
+let EndTime           = now();
+let CurrentStart      = EndTime - ReportPeriod;
+let BaselineStart     = CurrentStart - BaselinePeriod;
+let NormalBandPct     = 20.0;
+let MinBaselineEvents = 20;
+let ReportDays        = ReportPeriod / 1d;
+let BaselineDays      = BaselinePeriod / 1d;
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+let OfficeMetrics = (winStart:datetime, winEnd:datetime, days:real) {
+    OfficeActivity
+    | where TimeGenerated >= winStart and TimeGenerated < winEnd
+    | where UserType == "Regular"
+    | where Operation in (MeaningfulOps)
+    | extend UPN = tolower(tostring(UserId))
+    | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+    | summarize Events = count(), ActiveDays = dcount(bin(TimeGenerated, 1d)) by UPN
+    | extend ActiveDayRatio = round(todouble(ActiveDays) / days, 3)
+};
+let Baseline = OfficeMetrics(BaselineStart, CurrentStart, BaselineDays);
+let Current  = OfficeMetrics(CurrentStart, EndTime, ReportDays);
+let UserList = SigninLogs
+    | where TimeGenerated >= BaselineStart
+    | where UserType =~ "Member"
+    | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName)
+    | project UPN, UserDisplayName;
+Baseline
+| join kind=fullouter Current on UPN
+| extend UPN = coalesce(UPN, UPN1)
+| extend B_ActiveDayRatio = coalesce(ActiveDayRatio, 0.0),
+         C_ActiveDayRatio = coalesce(ActiveDayRatio1, 0.0),
+         B_Events = coalesce(Events, 0), C_Events = coalesce(Events1, 0)
+| where B_Events >= MinBaselineEvents and B_ActiveDayRatio > 0   // confident baseline only
+| extend ChangePct = round((C_ActiveDayRatio - B_ActiveDayRatio) / B_ActiveDayRatio * 100, 1)
+| where abs(ChangePct) > NormalBandPct                           // outside the normal band
+| extend Direction = iff(ChangePct > 0, "Increase - review only", "Decrease - review only")
+| join kind=leftouter UserList on UPN
+| project UserDisplayName, UPN, Direction, ChangePct,
+          B_ActiveDayRatio, C_ActiveDayRatio, B_Events, C_Events
+| order by abs(ChangePct) desc

@@ -1,0 +1,29 @@
+Workload,Operation,Category,EngagementSignal,Notes
+Exchange,Send,Email-Communication,Yes,User sent a message - strong human signal
+Exchange,SendAs,Email-Communication,Yes,Sent as another mailbox (delegate)
+Exchange,SendOnBehalf,Email-Communication,Yes,Sent on behalf of another mailbox
+SharePoint,FileUploaded,Content-Authoring,Yes,New content added
+SharePoint,FileModified,Content-Authoring,Yes,Edit - caveat: can be sync-driven
+SharePoint,FileCheckedIn,Content-Authoring,Yes,Deliberate save of a versioned doc
+SharePoint,FileRenamed,Content-Authoring,Yes,Deliberate file management
+SharePoint,FileMoved,Content-Authoring,Yes,Deliberate file management
+SharePoint,FileDownloaded,Content-Collaboration,Yes,Person retrieving content - also a security signal
+SharePoint,ClientViewSignaled,Content-Collaboration,Yes,Interactive page/doc view (client-confirmed)
+SharePoint,PageViewed,Content-Collaboration,Yes,Interactive page view
+MicrosoftTeams,MessageSent,Teams-Communication,Yes,Chat/channel message sent
+MicrosoftTeams,MessageEdited,Teams-Communication,Yes,Edited an existing message
+MicrosoftTeams,ChatCreated,Teams-Communication,Yes,Started a chat
+MicrosoftTeams,TeamCreated,Teams-Communication,Yes,Created a team
+MicrosoftTeams,ChannelAdded,Teams-Communication,Yes,Added a channel
+MicrosoftTeams,MeetingParticipantDetail,Meetings,Yes,Participated in a meeting
+SharePoint,FileAccessed,Read-Access,No,Very high volume - preview/sync not just people
+SharePoint,FilePreviewed,Read-Access,No,Often automatic thumbnail/preview generation
+SharePoint,FileSyncDownloadedFull,Background-Sync,No,OneDrive sync client not a person
+SharePoint,FileSyncUploadedFull,Background-Sync,No,OneDrive sync client not a person
+SharePoint,FileSyncDownloadedPartial,Background-Sync,No,OneDrive sync client not a person
+Exchange,MailItemsAccessed,Read-Access,No,Background/sync heavy and privacy-sensitive
+Exchange,Create,Read-Access,No,Ambiguous (drafts/calendar internals) - excluded pending validation
+MicrosoftTeams,MessagesListed,Read-Access,No,Reading message lists - background
+AzureActiveDirectory,UserLoggedIn,Security-Signal,No,Sign-ins measured from SigninLogs - avoid double counting
+Exchange,New-InboxRule,Administrative,No,Admin/config or security signal not engagement
+SharePoint,SearchQueryPerformed,Search,No,Noisy weak engagement signal

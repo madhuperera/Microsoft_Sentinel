@@ -1,0 +1,83 @@
+// =============================================================================
+// 00 - Config & shared taxonomy (REFERENCE — not a standalone report)
+// -----------------------------------------------------------------------------
+// Purpose
+//   Single place that documents every tunable parameter and the canonical
+//   activity taxonomy used by the office-baselines queries. Each metric query is
+//   self-contained (it repeats the parameters and a compact MeaningfulOps list it
+//   needs) so it runs without dependencies. When you change the model, change it
+//   here first, then propagate to the individual queries (and the watchlist CSV).
+//
+// Data sources : SigninLogs, AADNonInteractiveUserSignInLogs (optional), OfficeActivity
+// Advanced Hunting : NOT used.
+//
+// ⚠ Activity here is observable telemetry only. It is NOT a measure of
+//   productivity, work quality, effort, or hours worked. Deviations are review
+//   signals, never proof of underperformance or misconduct.
+//   See docs/assumptions-and-limitations.md.
+//
+// The block below is illustrative (it returns the taxonomy as a table). Copy the
+// `let` parameters into a query, or just read it as documentation.
+// =============================================================================
+//
+// ---------------------------------------------------------------- Reporting window
+let ReportPeriod    = 30d;   // selected / current reporting period
+let BaselinePeriod  = 30d;   // length of the prior baseline window (can be larger)
+let EndTime         = now(); // anchor; set to a fixed datetime to freeze a report
+let CurrentStart    = EndTime - ReportPeriod;
+let BaselineStart   = CurrentStart - BaselinePeriod;
+// ---------------------------------------------------------------- Model A thresholds
+let NormalBandPct     = 20.0; // +/- band treated as normal variation
+let MinBaselineEvents = 20;   // baseline confidence floor (suppress tiny baselines)
+// ---------------------------------------------------------------- Model B thresholds
+let OutlierZ        = 3.5;    // |modified z-score| above this = outlier (review)
+let MinUserActivity = 5;      // exclude users below this from org stats
+// ---------------------------------------------------------------- Noise controls
+let ServiceAccountWatchlist = "service-accounts";
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist(ServiceAccountWatchlist)
+    | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+// ---------------------------------------------------------------- Meaningful operations
+// Operations counted as engagement (EngagementSignal = Yes in the taxonomy).
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"
+]);
+// ---------------------------------------------------------------- Full taxonomy (doc + breakdown)
+// Source of truth in docs/activity-taxonomy.md and reference-data/office-activity-taxonomy/.
+let Taxonomy = datatable(Workload:string, Operation:string, Category:string, EngagementSignal:string)[
+    "Exchange","Send","Email-Communication","Yes",
+    "Exchange","SendAs","Email-Communication","Yes",
+    "Exchange","SendOnBehalf","Email-Communication","Yes",
+    "SharePoint","FileUploaded","Content-Authoring","Yes",
+    "SharePoint","FileModified","Content-Authoring","Yes",
+    "SharePoint","FileCheckedIn","Content-Authoring","Yes",
+    "SharePoint","FileRenamed","Content-Authoring","Yes",
+    "SharePoint","FileMoved","Content-Authoring","Yes",
+    "SharePoint","FileDownloaded","Content-Collaboration","Yes",
+    "SharePoint","ClientViewSignaled","Content-Collaboration","Yes",
+    "SharePoint","PageViewed","Content-Collaboration","Yes",
+    "MicrosoftTeams","MessageSent","Teams-Communication","Yes",
+    "MicrosoftTeams","MessageEdited","Teams-Communication","Yes",
+    "MicrosoftTeams","ChatCreated","Teams-Communication","Yes",
+    "MicrosoftTeams","TeamCreated","Teams-Communication","Yes",
+    "MicrosoftTeams","ChannelAdded","Teams-Communication","Yes",
+    "MicrosoftTeams","MeetingParticipantDetail","Meetings","Yes",
+    "SharePoint","FileAccessed","Read-Access","No",
+    "SharePoint","FilePreviewed","Read-Access","No",
+    "SharePoint","FileSyncDownloadedFull","Background-Sync","No",
+    "SharePoint","FileSyncUploadedFull","Background-Sync","No",
+    "SharePoint","FileSyncDownloadedPartial","Background-Sync","No",
+    "Exchange","MailItemsAccessed","Read-Access","No",
+    "Exchange","Create","Read-Access","No",
+    "MicrosoftTeams","MessagesListed","Read-Access","No",
+    "AzureActiveDirectory","UserLoggedIn","Security-Signal","No",
+    "Exchange","New-InboxRule","Administrative","No",
+    "SharePoint","SearchQueryPerformed","Search","No"
+];
+Taxonomy
+| order by EngagementSignal desc, Workload asc, Operation asc

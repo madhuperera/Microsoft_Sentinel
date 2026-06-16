@@ -1,0 +1,39 @@
+// =============================================================================
+// 03 - User activity trend over time  [MODEL A - graph-ready]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Daily trend of meaningful activity for a single user (or all users), split by
+//   workload. Feeds time-series charts in a future workbook and lets a reviewer
+//   see the shape of a change (gradual vs sudden, one workload vs all).
+//
+// Output : TimeGenerated (daily bin) x Workload x Events. Ready for `render timechart`.
+//
+// Usage  : set TargetUser to a UPN, or leave "" to aggregate across all users.
+//
+// Data sources : OfficeActivity
+//
+// ⚠ Observable telemetry only. NOT a productivity measure.
+// =============================================================================
+//
+let LookbackPeriod = 60d;          // covers a 30d current + 30d baseline by default
+let BinSize        = 1d;
+let TargetUser     = "";           // e.g. "jane.doe@contoso.com"; "" = all users
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+OfficeActivity
+| where TimeGenerated >= ago(LookbackPeriod)
+| where UserType == "Regular"
+| where Operation in (MeaningfulOps)
+| extend UPN = tolower(tostring(UserId))
+| where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+| where TargetUser == "" or UPN == tolower(TargetUser)
+| summarize Events = count() by bin(TimeGenerated, BinSize), Workload = tostring(OfficeWorkload)
+| order by TimeGenerated asc
+| render timechart

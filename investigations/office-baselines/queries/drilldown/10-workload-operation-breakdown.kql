@@ -1,0 +1,67 @@
+// =============================================================================
+// 10 - Workload / operation breakdown + taxonomy validation  [REVIEW + TUNING]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Two jobs:
+//   1. Drill-down: which operations make up activity in a period (per workload).
+//   2. Taxonomy tuning: every operation is tagged against the taxonomy
+//      (EngagementSignal Yes/No, or "UNMAPPED"), so you can see whether the
+//      meaningful/noise split still fits this tenant. Use this to maintain
+//      docs/activity-taxonomy.md and the MeaningfulOps lists.
+//
+// Output : per workload + operation — total events, distinct users, and the
+//          taxonomy classification. Sorted to surface high-volume UNMAPPED ops.
+//
+// Data sources : OfficeActivity
+//
+// ⚠ Observable telemetry only. NOT a productivity measure.
+// =============================================================================
+//
+let LookbackPeriod = 30d;
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+// Keep in sync with docs/activity-taxonomy.md and 00-config-and-shared-taxonomy.kql.
+let Taxonomy = datatable(Operation:string, Category:string, EngagementSignal:string)[
+    "Send","Email-Communication","Yes",
+    "SendAs","Email-Communication","Yes",
+    "SendOnBehalf","Email-Communication","Yes",
+    "FileUploaded","Content-Authoring","Yes",
+    "FileModified","Content-Authoring","Yes",
+    "FileCheckedIn","Content-Authoring","Yes",
+    "FileRenamed","Content-Authoring","Yes",
+    "FileMoved","Content-Authoring","Yes",
+    "FileDownloaded","Content-Collaboration","Yes",
+    "ClientViewSignaled","Content-Collaboration","Yes",
+    "PageViewed","Content-Collaboration","Yes",
+    "MessageSent","Teams-Communication","Yes",
+    "MessageEdited","Teams-Communication","Yes",
+    "ChatCreated","Teams-Communication","Yes",
+    "TeamCreated","Teams-Communication","Yes",
+    "ChannelAdded","Teams-Communication","Yes",
+    "MeetingParticipantDetail","Meetings","Yes",
+    "FileAccessed","Read-Access","No",
+    "FilePreviewed","Read-Access","No",
+    "FileSyncDownloadedFull","Background-Sync","No",
+    "FileSyncUploadedFull","Background-Sync","No",
+    "FileSyncDownloadedPartial","Background-Sync","No",
+    "MailItemsAccessed","Read-Access","No",
+    "Create","Read-Access","No",
+    "MessagesListed","Read-Access","No",
+    "UserLoggedIn","Security-Signal","No",
+    "New-InboxRule","Administrative","No",
+    "SearchQueryPerformed","Search","No"
+];
+OfficeActivity
+| where TimeGenerated >= ago(LookbackPeriod)
+| where UserType == "Regular"
+| extend UPN = tolower(tostring(UserId))
+| where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+| summarize Events = count(), Users = dcount(UPN)
+    by Workload = tostring(OfficeWorkload), Operation
+| join kind=leftouter Taxonomy on Operation
+| extend Category = coalesce(Category, "UNMAPPED"),
+         EngagementSignal = coalesce(EngagementSignal, "UNMAPPED")
+| project Workload, Operation, Category, EngagementSignal, Events, Users
+// Surface high-volume operations not yet classified — these are tuning candidates.
+| order by toint(EngagementSignal == "UNMAPPED") desc, Events desc

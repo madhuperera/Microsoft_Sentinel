@@ -1,0 +1,39 @@
+// =============================================================================
+// 08 - Organisation workload trend over time  [MODEL B - graph-ready]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Organisation-level daily trend per workload, expressed as a PER-ACTIVE-USER
+//   average so it isn't distorted by headcount changes or a few heavy users.
+//   Provides the company backdrop a user's trend (query 03) can be read against.
+//
+// Output : TimeGenerated (daily bin) x Workload x AvgEventsPerActiveUser.
+//          Ready for `render timechart`.
+//
+// Data sources : OfficeActivity
+//
+// ⚠ Observable telemetry only. NOT a productivity measure.
+// =============================================================================
+//
+let LookbackPeriod = 60d;
+let BinSize        = 1d;
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+OfficeActivity
+| where TimeGenerated >= ago(LookbackPeriod)
+| where UserType == "Regular"
+| where Operation in (MeaningfulOps)
+| extend UPN = tolower(tostring(UserId))
+| where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+| summarize Events = count(), ActiveUsers = dcount(UPN)
+    by Day = bin(TimeGenerated, BinSize), Workload = tostring(OfficeWorkload)
+| extend AvgEventsPerActiveUser = round(todouble(Events) / ActiveUsers, 2)
+| project Day, Workload, AvgEventsPerActiveUser, ActiveUsers, Events
+| order by Day asc
+| render timechart with (series = Workload, ycolumns = AvgEventsPerActiveUser)

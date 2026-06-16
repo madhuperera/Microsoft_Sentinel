@@ -1,0 +1,74 @@
+// =============================================================================
+// 04 - Sign-in active days vs own baseline  [MODEL A - independent proxy]
+// -----------------------------------------------------------------------------
+// Purpose
+//   An engagement proxy independent of OfficeActivity: distinct days with a
+//   successful INTERACTIVE sign-in, current period vs the user's own baseline.
+//   Useful to corroborate (or question) the OfficeActivity-based picture.
+//
+// Output : one row per user — baseline vs current sign-in active-day ratio,
+//          % change, distinct apps, and review status.
+//
+// Data sources : SigninLogs (interactive)
+//   Note: AADNonInteractiveUserSignInLogs is intentionally NOT used here — it is
+//   background/token traffic and is not an engagement signal. See the commented
+//   block at the bottom for an optional background-vs-interactive split.
+//
+// ⚠ Observable telemetry only. NOT a productivity measure. Review signals only.
+// =============================================================================
+//
+let ReportPeriod   = 30d;
+let BaselinePeriod = 30d;
+let EndTime        = now();
+let CurrentStart   = EndTime - ReportPeriod;
+let BaselineStart  = CurrentStart - BaselinePeriod;
+let NormalBandPct  = 20.0;
+let MinBaselineDays = 3;           // baseline confidence floor (active sign-in days)
+let ReportDays     = ReportPeriod / 1d;
+let BaselineDays   = BaselinePeriod / 1d;
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let SigninMetrics = (winStart:datetime, winEnd:datetime, days:real) {
+    SigninLogs
+    | where TimeGenerated >= winStart and TimeGenerated < winEnd
+    | where UserType =~ "Member"
+    | where ResultType == 0                       // successful sign-ins only
+    | extend UPN = tolower(UserPrincipalName)
+    | where UPN !in (ServiceAccountUPNs)
+    | summarize SignInDays = dcount(bin(TimeGenerated, 1d)),
+                DistinctApps = dcount(AppDisplayName),
+                arg_max(TimeGenerated, UserDisplayName) by UPN
+    | extend SignInDayRatio = round(todouble(SignInDays) / days, 3)
+};
+let Baseline = SigninMetrics(BaselineStart, CurrentStart, BaselineDays);
+let Current  = SigninMetrics(CurrentStart, EndTime, ReportDays);
+Baseline
+| join kind=fullouter Current on UPN
+| extend UPN = coalesce(UPN, UPN1),
+         UserDisplayName = coalesce(UserDisplayName1, UserDisplayName)
+| extend B_SignInDays = coalesce(SignInDays, 0), C_SignInDays = coalesce(SignInDays1, 0),
+         B_Ratio = coalesce(SignInDayRatio, 0.0), C_Ratio = coalesce(SignInDayRatio1, 0.0),
+         B_Apps = coalesce(DistinctApps, 0), C_Apps = coalesce(DistinctApps1, 0)
+| extend ChangePct = iff(B_Ratio > 0, round((C_Ratio - B_Ratio) / B_Ratio * 100, 1), real(null))
+| extend Status = case(
+        B_SignInDays < MinBaselineDays,  "Insufficient baseline (low confidence)",
+        isnull(ChangePct),               "No baseline activity",
+        abs(ChangePct) <= NormalBandPct, "Within normal range",
+        ChangePct > NormalBandPct,       "Increase - review only",
+                                         "Decrease - review only")
+| project UserDisplayName, UPN, B_SignInDays, C_SignInDays, B_Ratio, C_Ratio,
+          ChangePct, B_Apps, C_Apps, Status
+| order by ChangePct asc
+//
+// -----------------------------------------------------------------------------
+// OPTIONAL: background vs interactive split (only if AADNonInteractiveUserSignInLogs
+// is ingested). This is context, NOT an engagement metric — do not classify on it.
+// -----------------------------------------------------------------------------
+// union
+//   (SigninLogs | where TimeGenerated >= CurrentStart | extend Kind="Interactive"),
+//   (AADNonInteractiveUserSignInLogs | where TimeGenerated >= CurrentStart | extend Kind="NonInteractive")
+// | where UserType == "Member" and ResultType == 0
+// | extend UPN = tolower(UserPrincipalName)
+// | where UPN !in (ServiceAccountUPNs)
+// | summarize Count = count() by UPN, Kind
+// | evaluate pivot(Kind, sum(Count))

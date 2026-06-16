@@ -1,0 +1,37 @@
+// =============================================================================
+// 09 - User event drill-down  [REVIEW - underlying events]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Show the underlying meaningful events behind a single user's summary numbers,
+//   so a reviewer can understand WHAT drove a baseline deviation before drawing any
+//   conclusion. Use after a user appears in query 01/05.
+//
+// Output : raw meaningful OfficeActivity rows for the target user, most recent first.
+//
+// Usage  : set TargetUser. Optionally narrow LookbackPeriod / a single workload.
+//
+// Data sources : OfficeActivity
+//
+// ⚠ Observable telemetry only. NOT a productivity measure. This is event-level
+//   (privacy-sensitive) data — restrict access and review responsibly.
+// =============================================================================
+//
+let TargetUser     = "jane.doe@contoso.com";   // <-- set the UPN to review
+let LookbackPeriod = 30d;
+let WorkloadFilter = "";                        // "" = all workloads, else e.g. "SharePoint"
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+OfficeActivity
+| where TimeGenerated >= ago(LookbackPeriod)
+| where UserType == "Regular"
+| extend UPN = tolower(tostring(UserId))
+| where UPN == tolower(TargetUser)
+| where Operation in (MeaningfulOps)
+| where WorkloadFilter == "" or OfficeWorkload == WorkloadFilter
+| project TimeGenerated, UPN, OfficeWorkload, Operation, RecordType,
+          ResultStatus, ClientIP, UserAgent, OfficeObjectId, SourceFileName, Site_Url
+| order by TimeGenerated desc

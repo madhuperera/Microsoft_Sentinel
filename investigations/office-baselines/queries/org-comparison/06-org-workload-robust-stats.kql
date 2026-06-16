@@ -1,0 +1,65 @@
+// =============================================================================
+// 06 - Organisation / peer-group robust stats by workload  [MODEL B - secondary]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Establish what "normal" looks like across the organisation (or a peer group)
+//   for each workload, using ROBUST statistics that ignore outliers. These stats
+//   are the reference distribution that query 07 compares individual users against.
+//
+//   We use median / percentiles / MAD (not mean / stddev) because per-user M365
+//   activity is heavily right-skewed and dragged around by power users, automation,
+//   and service-like accounts. See docs/methodology.md.
+//
+// Output : one row per workload — user count, median, P25/P75/P90, and MAD of the
+//          per-user daily event rate.
+//
+// Data sources : OfficeActivity
+//
+// ⚠ Observable telemetry only. NOT a productivity measure.
+// =============================================================================
+//
+let ReportPeriod    = 30d;
+let EndTime         = now();
+let CurrentStart    = EndTime - ReportPeriod;
+let ReportDays      = ReportPeriod / 1d;
+let MinUserActivity = 5;            // exclude near-zero users so they don't skew the stats
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+// Per-user, per-workload daily event rate for the current period.
+// GroupKey = peer cohort. Default "All" (whole org). To compare like-with-like,
+// repoint GroupKey at a department/role column from a watchlist in Phase 2.
+let PerUser =
+    OfficeActivity
+    | where TimeGenerated >= CurrentStart and TimeGenerated < EndTime
+    | where UserType == "Regular"
+    | where Operation in (MeaningfulOps)
+    | extend UPN = tolower(tostring(UserId))
+    | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+    | summarize Events = count() by UPN, Workload = tostring(OfficeWorkload)
+    | where Events >= MinUserActivity
+    | extend GroupKey = "All",
+             EventsPerDay = round(todouble(Events) / ReportDays, 2);
+// Robust spread (MAD) needs the median first, then the median of absolute deviations.
+let Medians = PerUser
+    | summarize Median = percentile(EventsPerDay, 50) by GroupKey, Workload;
+let MAD = PerUser
+    | join kind=inner Medians on GroupKey, Workload
+    | extend AbsDev = abs(EventsPerDay - Median)
+    | summarize MAD = percentile(AbsDev, 50) by GroupKey, Workload;
+PerUser
+| summarize Users = dcount(UPN),
+            Median = round(percentile(EventsPerDay, 50), 2),
+            P25 = round(percentile(EventsPerDay, 25), 2),
+            P75 = round(percentile(EventsPerDay, 75), 2),
+            P90 = round(percentile(EventsPerDay, 90), 2)
+    by GroupKey, Workload
+| join kind=inner MAD on GroupKey, Workload
+| project GroupKey, Workload, Users, Median, P25, P75, P90, MAD = round(MAD, 2)
+| order by Workload asc

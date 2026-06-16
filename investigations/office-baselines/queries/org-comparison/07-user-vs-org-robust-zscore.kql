@@ -1,0 +1,78 @@
+// =============================================================================
+// 07 - User vs organisation / peer group  [MODEL B - secondary]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Place each user's per-workload activity against the organisation (or peer
+//   group): which percentile band they sit in, and a robust modified z-score that
+//   flags genuine outliers. This is SUPPORTING CONTEXT for Model A — it answers
+//   "is this user broadly in line with the company on this workload?" without a
+//   misleading leaderboard.
+//
+//   Headline = percentile band (easy to explain). Statistical flag = modified
+//   z-score, |z| > OutlierZ. An outlier is "worth a look", never a verdict.
+//
+// Output : one row per user + workload — user rate, group median, percentile band,
+//          modified z-score, and an outlier flag.
+//
+// Data sources : OfficeActivity, SigninLogs (display names)
+//
+// ⚠ Observable telemetry only. NOT a productivity measure. Review signals only.
+// =============================================================================
+//
+let ReportPeriod    = 30d;
+let EndTime         = now();
+let CurrentStart    = EndTime - ReportPeriod;
+let ReportDays      = ReportPeriod / 1d;
+let MinUserActivity = 5;
+let OutlierZ        = 3.5;          // |modified z-score| above this = outlier (review)
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+let PerUser =
+    OfficeActivity
+    | where TimeGenerated >= CurrentStart and TimeGenerated < EndTime
+    | where UserType == "Regular"
+    | where Operation in (MeaningfulOps)
+    | extend UPN = tolower(tostring(UserId))
+    | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+    | summarize Events = count() by UPN, Workload = tostring(OfficeWorkload)
+    | where Events >= MinUserActivity
+    | extend GroupKey = "All",          // repoint at a peer-group attribute in Phase 2
+             EventsPerDay = round(todouble(Events) / ReportDays, 2);
+let Stats = PerUser
+    | summarize Median = percentile(EventsPerDay, 50),
+                P25 = percentile(EventsPerDay, 25),
+                P75 = percentile(EventsPerDay, 75),
+                P90 = percentile(EventsPerDay, 90)
+        by GroupKey, Workload;
+let MAD = PerUser
+    | join kind=inner Stats on GroupKey, Workload
+    | extend AbsDev = abs(EventsPerDay - Median)
+    | summarize MAD = percentile(AbsDev, 50) by GroupKey, Workload;
+let UserList = SigninLogs
+    | where TimeGenerated >= CurrentStart
+    | where UserType =~ "Member"
+    | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName)
+    | project UPN, UserDisplayName;
+PerUser
+| join kind=inner Stats on GroupKey, Workload
+| join kind=inner MAD on GroupKey, Workload
+| extend ModifiedZ = iff(MAD == 0, 0.0, round(0.6745 * (EventsPerDay - Median) / MAD, 2))
+| extend PercentileBand = case(
+        EventsPerDay < P25,    "Below P25 (low vs peers)",
+        EventsPerDay < Median, "P25-P50",
+        EventsPerDay < P75,    "P50-P75",
+        EventsPerDay < P90,    "P75-P90",
+                               "Above P90 (high vs peers)")
+| extend OrgFlag = iff(abs(ModifiedZ) > OutlierZ, "Outlier - review only", "Typical")
+| join kind=leftouter UserList on UPN
+| project UserDisplayName, UPN, Workload, GroupKey,
+          UserEventsPerDay = EventsPerDay, GroupMedian = round(Median, 2),
+          PercentileBand, ModifiedZ, OrgFlag
+| order by Workload asc, ModifiedZ desc

@@ -1,0 +1,71 @@
+// =============================================================================
+// 02 - User vs own baseline, by workload  [MODEL A - PRIMARY]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Same per-user baseline comparison as query 01, but split by M365 workload
+//   (Exchange / SharePoint / OneDrive / Teams ...). Shows WHERE a user's pattern
+//   shifted, e.g. Teams up, SharePoint down. Graph-ready (grouped by workload).
+//
+// Output : one row per user + workload — baseline vs current event rate, % change,
+//          and review status.
+//
+// Data sources : OfficeActivity (metrics), SigninLogs (display names)
+//
+// ⚠ Observable telemetry only. NOT a productivity measure. Review signals only.
+// =============================================================================
+//
+let ReportPeriod      = 30d;
+let BaselinePeriod    = 30d;
+let EndTime           = now();
+let CurrentStart      = EndTime - ReportPeriod;
+let BaselineStart     = CurrentStart - BaselinePeriod;
+let NormalBandPct     = 20.0;
+let MinBaselineEvents = 10;   // per-workload floor (lower than whole-user floor)
+let ReportDays        = ReportPeriod / 1d;
+let BaselineDays      = BaselinePeriod / 1d;
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+let WorkloadMetrics = (winStart:datetime, winEnd:datetime, days:real) {
+    OfficeActivity
+    | where TimeGenerated >= winStart and TimeGenerated < winEnd
+    | where UserType == "Regular"
+    | where Operation in (MeaningfulOps)
+    | extend UPN = tolower(tostring(UserId))
+    | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+    | summarize Events = count(), ActiveDays = dcount(bin(TimeGenerated, 1d))
+        by UPN, Workload = tostring(OfficeWorkload)
+    | extend EventsPerDay = round(todouble(Events) / days, 2)
+};
+let Baseline = WorkloadMetrics(BaselineStart, CurrentStart, BaselineDays);
+let Current  = WorkloadMetrics(CurrentStart, EndTime, ReportDays);
+let UserList = SigninLogs
+    | where TimeGenerated >= BaselineStart
+    | where UserType =~ "Member"
+    | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName)
+    | project UPN, UserDisplayName;
+Baseline
+| join kind=fullouter Current on UPN, Workload
+| extend UPN = coalesce(UPN, UPN1), Workload = coalesce(Workload, Workload1)
+| extend B_EventsPerDay = coalesce(EventsPerDay, 0.0),
+         C_EventsPerDay = coalesce(EventsPerDay1, 0.0),
+         B_Events       = coalesce(Events, 0),
+         C_Events       = coalesce(Events1, 0)
+| extend ChangePct = iff(B_EventsPerDay > 0,
+            round((C_EventsPerDay - B_EventsPerDay) / B_EventsPerDay * 100, 1), real(null))
+| extend Status = case(
+        B_Events < MinBaselineEvents,    "Insufficient baseline (low confidence)",
+        isnull(ChangePct),               "No baseline activity",
+        abs(ChangePct) <= NormalBandPct, "Within normal range",
+        ChangePct > NormalBandPct,       "Increase - review only",
+                                         "Decrease - review only")
+| join kind=leftouter UserList on UPN
+| project UserDisplayName, UPN, Workload,
+          B_EventsPerDay, C_EventsPerDay, ChangePct, B_Events, C_Events, Status
+| order by UPN asc, Workload asc

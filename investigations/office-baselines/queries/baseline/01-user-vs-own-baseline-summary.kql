@@ -1,0 +1,84 @@
+// =============================================================================
+// 01 - User vs own baseline (summary)  [MODEL A - PRIMARY]
+// -----------------------------------------------------------------------------
+// Purpose
+//   For each user, compare observable M365 activity in the current reporting
+//   period against that SAME user's previous period of equal length. Headline
+//   metric is the active-day ratio (resists per-event inflation); event rate is
+//   shown as secondary context.
+//
+// Output : one row per user — baseline vs current rates, % change, and a
+//          review status banded by NormalBandPct. Summary-level (use 09/10 to
+//          drill into underlying events).
+//
+// Data sources : OfficeActivity (metrics), SigninLogs (display names)
+//
+// ⚠ Observable telemetry only. NOT a productivity measure. Statuses are review
+//   signals, never proof of underperformance. See docs/assumptions-and-limitations.md
+// =============================================================================
+//
+let ReportPeriod      = 30d;
+let BaselinePeriod    = 30d;
+let EndTime           = now();
+let CurrentStart      = EndTime - ReportPeriod;
+let BaselineStart     = CurrentStart - BaselinePeriod;
+let NormalBandPct     = 20.0;
+let MinBaselineEvents = 20;
+let ReportDays        = ReportPeriod / 1d;
+let BaselineDays      = BaselinePeriod / 1d;
+let ServiceAccountUPNs = toscalar(
+    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+// Reusable per-window metric builder.
+let OfficeMetrics = (winStart:datetime, winEnd:datetime, days:real) {
+    OfficeActivity
+    | where TimeGenerated >= winStart and TimeGenerated < winEnd
+    | where UserType == "Regular"
+    | where Operation in (MeaningfulOps)
+    | extend UPN = tolower(tostring(UserId))
+    | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+    | summarize Events = count(), ActiveDays = dcount(bin(TimeGenerated, 1d)),
+                Workloads = dcount(OfficeWorkload) by UPN
+    | extend EventsPerDay = round(todouble(Events) / days, 2),
+             ActiveDayRatio = round(todouble(ActiveDays) / days, 3)
+};
+let Baseline = OfficeMetrics(BaselineStart, CurrentStart, BaselineDays);
+let Current  = OfficeMetrics(CurrentStart, EndTime, ReportDays);
+let UserList = SigninLogs
+    | where TimeGenerated >= BaselineStart
+    | where UserType =~ "Member"
+    | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName)
+    | project UPN, UserDisplayName;
+Baseline
+| join kind=fullouter Current on UPN
+| extend UPN = coalesce(UPN, UPN1)
+| extend B_ActiveDayRatio = coalesce(ActiveDayRatio, 0.0),
+         C_ActiveDayRatio = coalesce(ActiveDayRatio1, 0.0),
+         B_EventsPerDay   = coalesce(EventsPerDay, 0.0),
+         C_EventsPerDay   = coalesce(EventsPerDay1, 0.0),
+         B_Events         = coalesce(Events, 0),
+         C_Events         = coalesce(Events1, 0),
+         B_Workloads      = coalesce(Workloads, 0),
+         C_Workloads      = coalesce(Workloads1, 0)
+| extend ActiveDayChangePct = iff(B_ActiveDayRatio > 0,
+            round((C_ActiveDayRatio - B_ActiveDayRatio) / B_ActiveDayRatio * 100, 1), real(null)),
+         EventRateChangePct = iff(B_EventsPerDay > 0,
+            round((C_EventsPerDay - B_EventsPerDay) / B_EventsPerDay * 100, 1), real(null))
+| extend Status = case(
+        B_Events < MinBaselineEvents,             "Insufficient baseline (low confidence)",
+        isnull(ActiveDayChangePct),               "No baseline activity",
+        abs(ActiveDayChangePct) <= NormalBandPct, "Within normal range",
+        ActiveDayChangePct > NormalBandPct,       "Increase - review only",
+                                                  "Decrease - review only")
+| join kind=leftouter UserList on UPN
+| project UserDisplayName, UPN,
+          B_ActiveDayRatio, C_ActiveDayRatio, ActiveDayChangePct,
+          B_EventsPerDay, C_EventsPerDay, EventRateChangePct,
+          B_Workloads, C_Workloads, B_Events, C_Events, Status
+| order by ActiveDayChangePct asc nulls last
