@@ -35,8 +35,12 @@ let MinUserActivity = 5;      // exclude users below this from org stats
 // ---------------------------------------------------------------- Noise controls
 let ServiceAccountWatchlist = "service-accounts";
 let ServiceAccountUPNs = toscalar(
-    _GetWatchlist(ServiceAccountWatchlist)
-    | summarize make_set(tolower(tostring(UPN))));
+    // isfuzzy=true: if the watchlist is absent the query still runs (degrades to
+    // no service-account exclusions) instead of failing. UserType + ExcludedUPNs remain.
+    union isfuzzy=true
+        (datatable(UPN:string)[]),
+        (_GetWatchlist(ServiceAccountWatchlist) | project UPN = tostring(UPN))
+    | summarize make_set(tolower(UPN)));
 let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
 // ---------------------------------------------------------------- Meaningful operations
 // Operations counted as engagement (EngagementSignal = Yes in the taxonomy).

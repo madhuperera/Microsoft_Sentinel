@@ -77,7 +77,9 @@ Tunable values are `let` parameters at the top of each file.
 ## Dependencies
 
 - `service-accounts` watchlist (`reference-data/service-accounts/`) — used to exclude
-  service accounts. Queries assume it exists and has a `UPN` column.
+  service accounts, expected to have a `UPN` column. Referenced via
+  `union isfuzzy=true`, so the queries still run if it's missing (they just skip
+  the service-account exclusion).
 - *(Optional, future)* `office-activity-taxonomy` watchlist
   (`reference-data/office-activity-taxonomy/`) — lets you maintain the taxonomy
   centrally instead of inline. Queries ship self-contained (inline) so they run

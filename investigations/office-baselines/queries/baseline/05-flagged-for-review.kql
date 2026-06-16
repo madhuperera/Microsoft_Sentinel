@@ -28,7 +28,12 @@ let MinBaselineEvents = 20;
 let ReportDays        = ReportPeriod / 1d;
 let BaselineDays      = BaselinePeriod / 1d;
 let ServiceAccountUPNs = toscalar(
-    _GetWatchlist("service-accounts") | summarize make_set(tolower(tostring(UPN))));
+    // isfuzzy=true: if the watchlist is absent the query still runs (degrades to
+    // no service-account exclusions) instead of failing. UserType + ExcludedUPNs remain.
+    union isfuzzy=true
+        (datatable(UPN:string)[]),
+        (_GetWatchlist("service-accounts") | project UPN = tostring(UPN))
+    | summarize make_set(tolower(UPN)));
 let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
 let MeaningfulOps = dynamic([
     "Send","SendAs","SendOnBehalf",

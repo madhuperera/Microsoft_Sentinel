@@ -21,7 +21,11 @@
 ## 2. Assumptions made in the queries
 
 - The `service-accounts` watchlist exists, is current, and exposes a `UPN` column
-  (matching `reference-data/service-accounts/`).
+  (matching `reference-data/service-accounts/`). Queries reference it via
+  `union isfuzzy=true`, so a **missing** watchlist no longer fails the query — it
+  degrades gracefully to *no service-account exclusions* (the `UserType` filter and
+  the static `ExcludedUPNs` list still apply). A watchlist that exists but lacks a
+  `UPN` column will still error; an empty watchlist applies no exclusions.
 - `OfficeActivity.UserId` and `SigninLogs.UserPrincipalName` hold the UPN and can be
   joined on `tolower(...)`.
 - `UserType == "Regular"` (OfficeActivity) and `UserType == "Member"` (SigninLogs)

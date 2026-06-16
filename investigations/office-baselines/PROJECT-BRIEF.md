@@ -90,7 +90,8 @@ records, and sync clients / background processes generate large volumes. So:
 ## 6. Noise / exclusion rules
 
 - Exclude service accounts via the `service-accounts` watchlist
-  (`reference-data/service-accounts/`).
+  (`reference-data/service-accounts/`). Referenced with `union isfuzzy=true` so a
+  missing watchlist degrades gracefully (no exclusions) instead of failing the query.
 - Exclude system principals (`SHAREPOINT\system`, `app@sharepoint`, etc.).
 - Restrict `OfficeActivity` to `UserType == "Regular"` and `SigninLogs` to
   `UserType == "Member"`.
@@ -132,6 +133,11 @@ investigations/office-baselines/
 Newest first. Each entry records guidance that shaped the project so the direction,
 assumptions, constraints, and principles stay current.
 
+- **2026-06-16** (update) — Made service-account watchlist references resilient:
+  all queries now use `union isfuzzy=true` so a missing `service-accounts` watchlist
+  degrades to no exclusions instead of erroring. Also fixed two review findings:
+  `SigninLogs` `UserType` compare changed to case-insensitive `=~ "Member"`, and a
+  broken `order by` in `05-flagged-for-review.kql`.
 - **2026-06-16** — Project initiated. Phase 1 = KQL + docs only, no workbook.
   Data sources limited to `SigninLogs`, `AADNonInteractiveUserSignInLogs` (if
   available), `OfficeActivity`. No Advanced Hunting. Primary = user vs own
