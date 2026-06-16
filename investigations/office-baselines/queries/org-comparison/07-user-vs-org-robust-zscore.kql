@@ -81,6 +81,9 @@ PerUser
                                "Above P90 (high vs peers)")
 | extend OrgFlag = iff(abs(ModifiedZ) > OutlierZ, "Outlier - review only", "Typical")
 | join kind=leftouter UserList on UPN
+// Exclude accounts with no resolvable member display name (not found as a Member in
+// SigninLogs within the window - e.g. service-like, stale, or non-member identities).
+| where isnotempty(UserDisplayName)
 | project UserDisplayName, UPN, Workload, GroupKey,
           UserEventsPerDay = EventsPerDay, GroupMedian = round(Median, 2),
           PercentileBand, ModifiedZ, OrgFlag

@@ -94,7 +94,14 @@ records, and sync clients / background processes generate large volumes. So:
   missing watchlist degrades gracefully (no exclusions) instead of failing the query.
 - Exclude system principals (`SHAREPOINT\system`, `app@sharepoint`, etc.).
 - Restrict `OfficeActivity` to `UserType == "Regular"` and `SigninLogs` to
-  `UserType == "Member"`.
+  `UserType =~ "Member"`.
+- Exclude B2B guests by dropping UPNs containing the `#EXT#` marker (`UserType ==
+  "Regular"` in OfficeActivity does **not** exclude guests).
+- Exclude accounts with an empty `UserDisplayName` (i.e. not resolvable to a Member
+  in `SigninLogs` within the window). Applies to queries that carry a display-name
+  column: `01, 02, 04, 05, 07`. The trend/org/drill-down queries (`03, 06, 08, 09,
+  10`) have no display-name column, so this rule is N/A there; they still rely on
+  the `#EXT#`, service-account, system-principal, and `UserType` filters.
 - Count only operations flagged `EngagementSignal = Yes` in the taxonomy.
 - `AADNonInteractiveUserSignInLogs` is **background/token traffic** — it is *not*
   an engagement metric and must not be counted as one. It is included only to help
@@ -133,6 +140,10 @@ investigations/office-baselines/
 Newest first. Each entry records guidance that shaped the project so the direction,
 assumptions, constraints, and principles stay current.
 
+- **2026-06-16** (update) — Excluded accounts with an empty `UserDisplayName` (not
+  resolvable to a Member in SigninLogs) via `where isnotempty(UserDisplayName)` in
+  the queries that carry that column: `01, 02, 04, 05, 07`. Not applicable to `03,
+  06, 08, 09, 10` (no display-name column).
 - **2026-06-16** (update) — Excluded B2B guests from all OfficeActivity-based
   queries. `UserType == "Regular"` does not filter guests; they were appearing
   (with blank display names) because the SigninLogs member filter only fed a

@@ -34,6 +34,10 @@
   dropping UPNs containing the `#EXT#` marker (`where UPN !contains "#ext#"`).
   `UserType =~ "Member"` (SigninLogs) excludes guests natively there.
 - B2B guest accounts are assumed to carry the standard `#EXT#` marker in their UPN.
+- Accounts that cannot be resolved to a Member display name in `SigninLogs` (empty
+  `UserDisplayName`) are excluded via `where isnotempty(UserDisplayName)` in the
+  display-name-bearing queries (`01, 02, 04, 05, 07`). This assumes every in-scope
+  staff member has at least one interactive Member sign-in within the window.
 - The taxonomy in `docs/activity-taxonomy.md` is a reasonable first cut of meaningful
   operations for a typical tenant.
 - Calendar-day normalisation is acceptable (working-day calendar not yet applied).
@@ -57,6 +61,10 @@
   metric, but raw event rates remain sensitive to app/sync behaviour.
 - **Shared/delegated mailboxes & multi-user devices** can attribute activity in ways
   that don't map cleanly to one person.
+- **Empty-display-name exclusion can drop real members** — a member whose only
+  sign-ins in the window were non-interactive (token/background) or who didn't sign
+  in at all will have no `UserDisplayName` and be filtered out. Widen the `SigninLogs`
+  window, or source display names from a roster watchlist, if this matters.
 
 ## 4. Pre-workbook validation checklist
 

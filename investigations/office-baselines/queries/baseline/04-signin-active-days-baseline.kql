@@ -61,6 +61,8 @@ Baseline
         abs(ChangePct) <= NormalBandPct, "Within normal range",
         ChangePct > NormalBandPct,       "Increase - review only",
                                          "Decrease - review only")
+// Exclude accounts with no resolvable display name.
+| where isnotempty(UserDisplayName)
 | project UserDisplayName, UPN, B_SignInDays, C_SignInDays, B_Ratio, C_Ratio,
           ChangePct, B_Apps, C_Apps, Status
 | order by ChangePct asc

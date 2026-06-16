@@ -73,6 +73,9 @@ Baseline
 | where abs(ChangePct) > NormalBandPct                           // outside the normal band
 | extend Direction = iff(ChangePct > 0, "Increase - review only", "Decrease - review only")
 | join kind=leftouter UserList on UPN
+// Exclude accounts with no resolvable member display name (not found as a Member in
+// SigninLogs within the window - e.g. service-like, stale, or non-member identities).
+| where isnotempty(UserDisplayName)
 | project UserDisplayName, UPN, Direction, ChangePct,
           B_ActiveDayRatio, C_ActiveDayRatio, B_Events, C_Events
 | order by abs(ChangePct) desc

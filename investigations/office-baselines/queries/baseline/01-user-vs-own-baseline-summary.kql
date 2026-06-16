@@ -86,6 +86,9 @@ Baseline
         ActiveDayChangePct > NormalBandPct,       "Increase - review only",
                                                   "Decrease - review only")
 | join kind=leftouter UserList on UPN
+// Exclude accounts with no resolvable member display name (not found as a Member in
+// SigninLogs within the window - e.g. service-like, stale, or non-member identities).
+| where isnotempty(UserDisplayName)
 | project UserDisplayName, UPN,
           B_ActiveDayRatio, C_ActiveDayRatio, ActiveDayChangePct,
           B_EventsPerDay, C_EventsPerDay, EventRateChangePct,

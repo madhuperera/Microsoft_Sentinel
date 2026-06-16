@@ -75,6 +75,9 @@ Baseline
         ChangePct > NormalBandPct,       "Increase - review only",
                                          "Decrease - review only")
 | join kind=leftouter UserList on UPN
+// Exclude accounts with no resolvable member display name (not found as a Member in
+// SigninLogs within the window - e.g. service-like, stale, or non-member identities).
+| where isnotempty(UserDisplayName)
 | project UserDisplayName, UPN, Workload,
           B_EventsPerDay, C_EventsPerDay, ChangePct, B_Events, C_Events, Status
 | order by UPN asc, Workload asc

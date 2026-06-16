@@ -141,6 +141,15 @@ A user is flagged as an outlier for a workload when:
   Principal), so guests are removed by dropping UPNs containing `#EXT#`. The
   `SigninLogs` member filter alone is insufficient because it is used only for a
   left-outer display-name lookup, which keeps unmatched (guest) metric rows.
+- **Unresolvable accounts are excluded.** Rows where `UserDisplayName` is empty after
+  the `SigninLogs` lookup are dropped (`where isnotempty(UserDisplayName)`). An empty
+  display name means the account couldn't be matched to a Member sign-in in the
+  window — typically a service-like, stale, or non-member identity — so it is not a
+  meaningful "staff" row. This applies to the queries that carry a display-name
+  column (`01, 02, 04, 05, 07`); the trend/org/drill-down queries don't surface a
+  display name and so don't apply this filter. *Trade-off:* a genuine member who had
+  **no interactive Member sign-in** in the window (only non-interactive/token sign-ins,
+  or none) will also be dropped — review the `SigninLogs` window if you expect such users.
 
 ## 6. Parameters (single source of truth in `00-config-and-shared-taxonomy.kql`)
 
