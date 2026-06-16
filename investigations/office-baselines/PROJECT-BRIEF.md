@@ -117,7 +117,7 @@ investigations/office-baselines/
 │   ├── methodology.md                · comparison maths, thresholds, statistics
 │   ├── activity-taxonomy.md          · meaningful vs noisy operations + rationale
 │   └── assumptions-and-limitations.md· guardrails, caveats, validation checklist
-├── queries/
+├── queries/    (each NN-*.kql has a companion NN-*.md: step-by-step logic walkthrough)
 │   ├── 00-config-and-shared-taxonomy.kql      · canonical params + taxonomy block
 │   ├── baseline/                     · Model A (user vs own baseline)
 │   │   ├── 01-user-vs-own-baseline-summary.kql
@@ -140,6 +140,8 @@ investigations/office-baselines/
 Newest first. Each entry records guidance that shaped the project so the direction,
 assumptions, constraints, and principles stay current.
 
+- **2026-06-16** (update) — Added a per-query step-by-step companion doc
+  (`NN-*.md`) next to every `NN-*.kql` explaining its logic, parameters, and output.
 - **2026-06-16** (update) — Excluded accounts with an empty `UserDisplayName` (not
   resolvable to a Member in SigninLogs) via `where isnotempty(UserDisplayName)` in
   the queries that carry that column: `01, 02, 04, 05, 07`. Not applicable to `03,

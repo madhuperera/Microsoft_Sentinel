@@ -38,6 +38,10 @@ No Advanced Hunting. No other tables.
 All queries are plain Sentinel / Log Analytics KQL — paste into **Sentinel → Logs**.
 Tunable values are `let` parameters at the top of each file.
 
+> Every `NN-*.kql` has a companion **`NN-*.md`** next to it with a step-by-step
+> explanation of how that query's logic works, its parameters, and how to read the
+> output. Open the `.md` alongside the `.kql`.
+
 1. Open [`queries/00-config-and-shared-taxonomy.kql`](queries/00-config-and-shared-taxonomy.kql)
    to see every parameter and the canonical activity taxonomy in one place.
 2. Run the **baseline** queries (Model A):
