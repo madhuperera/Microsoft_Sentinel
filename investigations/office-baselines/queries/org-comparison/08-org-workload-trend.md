@@ -50,5 +50,5 @@ users. It's the company backdrop you read an individual's trend (`03`) against.
 
 ## Related
 
-`03` (per-user trend to overlay) · `06` (snapshot org stats) · `02` (per-user,
-per-workload baseline).
+`03` (per-user trend to overlay) · `11` (one user vs the org average on a single
+chart) · `06` (snapshot org stats) · `02` (per-user, per-workload baseline).

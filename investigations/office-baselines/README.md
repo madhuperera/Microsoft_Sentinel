@@ -61,6 +61,7 @@ Tunable values are `let` parameters at the top of each file.
    | `org-comparison/06-org-workload-robust-stats.kql` | Org/peer robust stats per workload (median, MAD, percentiles). |
    | `org-comparison/07-user-vs-org-robust-zscore.kql` | Each user vs org: percentile band + modified z-score. |
    | `org-comparison/08-org-workload-trend.kql` | Org-level workload trend over time — graph-ready. |
+   | `org-comparison/11-user-vs-org-activity-trend.kql` | One user's trend overlaid on the org average, one chart — graph-ready. |
 
 4. Use the **drill-down** queries to review underlying events:
 

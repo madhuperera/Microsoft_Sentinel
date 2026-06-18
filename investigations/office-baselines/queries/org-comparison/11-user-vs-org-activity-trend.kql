@@ -1,0 +1,77 @@
+// =============================================================================
+// 11 - User vs organisation activity trend  [MODEL A vs B - graph-ready]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Overlay ONE user's daily meaningful-activity trend on the organisation
+//   backdrop, on the SAME per-person scale, so you can see at a glance when the
+//   user runs above or below "normal" over time.
+//
+//   This is the combined view that queries 03 (per-user trend) and 08 (org trend)
+//   only show separately. The two series are directly comparable because:
+//     * "User"                 = the target user's meaningful events that day;
+//     * "Org avg / active user"= the org's meaningful events that day divided by
+//                                the number of active users — i.e. what a typical
+//                                active person did that day.
+//
+// Output : Day (daily bin) x Series ("User" / "Org avg / active user") x Value.
+//          Ready for `render timechart` — two lines on one chart.
+//
+// Usage  : set TargetUser. Optionally set WorkloadFilter to compare a single
+//          workload, or widen LookbackPeriod.
+//
+// Data sources : OfficeActivity
+//
+// ⚠ Observable telemetry only. NOT a productivity measure. A line above the org
+//   average is a review signal, never proof of more (or better) work.
+// =============================================================================
+//
+let LookbackPeriod = 60d;          // covers a 30d current + 30d baseline by default
+let BinSize        = 1d;
+let TargetUser     = "jane.doe@contoso.com";   // <-- REQUIRED: the UPN to compare
+let WorkloadFilter = "";                        // "" = all workloads, else e.g. "SharePoint"
+let ServiceAccountUPNs = toscalar(
+    // isfuzzy=true: if the watchlist is absent the query still runs (degrades to
+    // no service-account exclusions) instead of failing. UserType + ExcludedUPNs remain.
+    union isfuzzy=true
+        (datatable(UPN:string)[]),
+        (_GetWatchlist("service-accounts") | project UPN = tostring(UPN))
+    | summarize make_set(tolower(UPN)));
+let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
+let MeaningfulOps = dynamic([
+    "Send","SendAs","SendOnBehalf",
+    "FileUploaded","FileModified","FileCheckedIn","FileRenamed","FileMoved","FileDownloaded",
+    "ClientViewSignaled","PageViewed",
+    "MessageSent","MessageEdited","ChatCreated","TeamCreated","ChannelAdded",
+    "MeetingParticipantDetail"]);
+// Shared base: meaningful events per user per day (optionally one workload).
+// materialize() — the base is referenced twice (user slice + org average), so we
+// compute the scan once and reuse it.
+let Base = materialize(
+    OfficeActivity
+    | where TimeGenerated >= ago(LookbackPeriod)
+    | where UserType == "Regular"
+    | where Operation in (MeaningfulOps)
+    | extend UPN = tolower(tostring(UserId))
+    // Exclude external / B2B guests: OfficeActivity UserType "Regular" includes guests
+    // (it only separates Regular from Admin/System/App). Guest UPNs carry the "#EXT#"
+    // marker. Remove this line if you want guests included.
+    | where UPN !contains "#ext#"
+    | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs)
+    | where WorkloadFilter == "" or OfficeWorkload == WorkloadFilter
+    | summarize Events = count() by Day = bin(TimeGenerated, BinSize), UPN);
+// User line: the target user's daily meaningful events.
+let UserSeries = Base
+    | where UPN == tolower(TargetUser)
+    // todouble: keep Value as real so it unions cleanly with the org average below.
+    // union splits a same-named column when the types differ (long vs real).
+    | summarize Value = todouble(sum(Events)) by Day
+    | extend Series = "User";
+// Org line: average meaningful events per ACTIVE user per day (headcount-independent
+// backdrop, same scale as the user line).
+let OrgSeries = Base
+    | summarize Value = round(todouble(sum(Events)) / dcount(UPN), 2) by Day
+    | extend Series = "Org avg / active user";
+union UserSeries, OrgSeries
+| project Day, Series, Value
+| order by Day asc
+| render timechart with (series = Series, ycolumns = Value)

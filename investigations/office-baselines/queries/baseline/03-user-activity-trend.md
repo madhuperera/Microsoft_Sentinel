@@ -53,4 +53,5 @@ sudden, and whether it's one workload or across the board.
 ## Related
 
 `01`/`02` (the summary the trend explains) · `08` (org-level trend to compare a user
-against) · `09` (raw events for a user).
+against) · `11` (this user's trend and the org average overlaid on one chart) ·
+`09` (raw events for a user).
