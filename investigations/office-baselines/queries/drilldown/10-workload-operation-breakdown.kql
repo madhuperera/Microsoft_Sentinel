@@ -26,8 +26,25 @@ let ServiceAccountUPNs = toscalar(
         (_GetWatchlist("service-accounts") | project UPN = tostring(UPN))
     | summarize make_set(tolower(UPN)));
 let ExcludedUPNs = dynamic(["sharepoint\\system","app@sharepoint","system@sharepoint"]);
-// Keep in sync with docs/activity-taxonomy.md and 00-config-and-shared-taxonomy.kql.
+// -----------------------------------------------------------------------------
+// Expanded (tuning) taxonomy — keyed on Operation only.
+//
+// This is the *observed* map: a superset of the canonical engagement model in
+// 00-config-and-shared-taxonomy.kql / docs/activity-taxonomy.md. Its job is to
+// leave nothing as "UNMAPPED" in this breakdown, so the noise is labelled and
+// reviewable rather than lumped together.
+//
+//   * The EngagementSignal = "Yes" rows are EXACTLY the canonical meaningful set
+//     (must match MeaningfulOps in the metric queries). Do not add to them here
+//     without also updating 00 + the metric queries + docs together.
+//   * Everything else is classified but EngagementSignal = "No" — i.e. currently
+//     excluded. Operations marked "(candidate)" below are plausible engagement
+//     signals a reviewer may decide to promote; see docs/activity-taxonomy.md.
+//
+// Category definitions live in docs/activity-taxonomy.md (source of truth).
+// -----------------------------------------------------------------------------
 let Taxonomy = datatable(Operation:string, Category:string, EngagementSignal:string)[
+    // ---- Meaningful (Yes) — canonical engagement set, mirrors MeaningfulOps ----
     "Send","Email-Communication","Yes",
     "SendAs","Email-Communication","Yes",
     "SendOnBehalf","Email-Communication","Yes",
@@ -45,17 +62,121 @@ let Taxonomy = datatable(Operation:string, Category:string, EngagementSignal:str
     "TeamCreated","Teams-Communication","Yes",
     "ChannelAdded","Teams-Communication","Yes",
     "MeetingParticipantDetail","Meetings","Yes",
-    "FileAccessed","Read-Access","No",
-    "FilePreviewed","Read-Access","No",
+    // ---- Mailbox-Activity (No) — background-heavy mailbox modifications --------
+    "Update","Mailbox-Activity","No",
+    // ---- Background-Sync (No) — sync client / system-generated, not a person ---
     "FileSyncDownloadedFull","Background-Sync","No",
     "FileSyncUploadedFull","Background-Sync","No",
     "FileSyncDownloadedPartial","Background-Sync","No",
+    "FileModifiedExtended","Background-Sync","No",
+    "FileUploadedPartial","Background-Sync","No",
+    "TeamsMeetingRecordingUploaded","Background-Sync","No",
+    // ---- Read-Access (No) — passive access / preview / link & token use -------
+    "FileAccessed","Read-Access","No",
+    "FilePreviewed","Read-Access","No",
     "MailItemsAccessed","Read-Access","No",
     "Create","Read-Access","No",
     "MessagesListed","Read-Access","No",
+    "FileAccessedExtended","Read-Access","No",
+    "AttachmentAccess","Read-Access","No",
+    "ListViewed","Read-Access","No",
+    "ListItemViewed","Read-Access","No",
+    "PagePrefetched","Read-Access","No",
+    "PageViewedExtended","Read-Access","No",
+    "SharingLinkUsed","Read-Access","No",
+    "CompanyLinkUsed","Read-Access","No",
+    "SecureLinkUsed","Read-Access","No",
+    "PreAuthTokenUsed","Read-Access","No",
+    "PreAuthTokenUsedExtended","Read-Access","No",
+    "MessageReadReceiptReceived","Read-Access","No",
+    "FileTimelineMetadataAccessed","Read-Access","No",
+    "PerformedCardAction","Read-Access","No",
+    // ---- Content-Lifecycle (No) — delete / recycle / restore (file + mail) -----
+    "MoveToDeletedItems","Content-Lifecycle","No",
+    "SoftDelete","Content-Lifecycle","No",
+    "HardDelete","Content-Lifecycle","No",
+    "FileRecycled","Content-Lifecycle","No",
+    "FolderRecycled","Content-Lifecycle","No",
+    "ListItemDeleted","Content-Lifecycle","No",
+    "ListItemRecycled","Content-Lifecycle","No",
+    "ListItemRestored","Content-Lifecycle","No",
+    // ---- Content-Management (No) — folder/list structure & file housekeeping ---
+    "FolderCreated","Content-Management","No",
+    "FolderModified","Content-Management","No",
+    "FolderMoved","Content-Management","No",
+    "FolderRenamed","Content-Management","No",
+    "FileCopied","Content-Management","No",
+    "FileCheckedOut","Content-Management","No",
+    "CustomThumbnailUploaded","Content-Management","No",
+    "ListCreated","Content-Management","No",
+    "ListUpdated","Content-Management","No",
+    "ListItemCreated","Content-Management","No",
+    "ListItemUpdated","Content-Management","No",
+    "ListColumnCreated","Content-Management","No",
+    "ListColumnUpdated","Content-Management","No",
+    "ListColumnDeleted","Content-Management","No",
+    "ListContentTypeUpdated","Content-Management","No",
+    "ListViewCreated","Content-Management","No",
+    "ListViewUpdated","Content-Management","No",
+    // ---- Sharing-Collaboration (No, candidate) — deliberate sharing actions ----
+    "SharingSet","Sharing-Collaboration","No",
+    "SharingLinkCreated","Sharing-Collaboration","No",
+    "SharingLinkUpdated","Sharing-Collaboration","No",
+    "CompanyLinkCreated","Sharing-Collaboration","No",
+    "SecureLinkCreated","Sharing-Collaboration","No",
+    "SecureLinkUpdated","Sharing-Collaboration","No",
+    "AddedToSharingLink","Sharing-Collaboration","No",
+    "AddedToSecureLink","Sharing-Collaboration","No",
+    // ---- Content-Collaboration (No, candidate) — commenting on content ---------
+    "CommentCreated","Content-Collaboration","No",
+    "CommentEdit","Content-Collaboration","No",
+    // ---- Teams-Communication (No, candidate) — message variants & reactions ----
+    "MessageCreatedHasLink","Teams-Communication","No",
+    "MessageEditedHasLink","Teams-Communication","No",
+    "MessageUpdated","Teams-Communication","No",
+    "ReactedToMessage","Teams-Communication","No",
+    // ---- Meetings (No, candidate) — call/meeting records --------------------
+    "CallParticipantDetail","Meetings","No",
+    "MeetingDetail","Meetings","No",
+    // ---- Search (No) ----------------------------------------------------------
+    "SearchQueryPerformed","Search","No",
+    "SearchQueryInitiatedSharePoint","Search","No",
+    // ---- Security-Signal (No) — sessions / sign-ins / security posture --------
     "UserLoggedIn","Security-Signal","No",
+    "TeamsSessionStarted","Security-Signal","No",
+    "SignInEvent","Security-Signal","No",
+    "BaselineSecurityModeThirdPartyAppHPA","Security-Signal","No",
+    "SiteAccessWithCustomScripts","Security-Signal","No",
+    // ---- Administrative (No) — permissions, membership, config, site admin -----
     "New-InboxRule","Administrative","No",
-    "SearchQueryPerformed","Search","No"
+    "AddedToGroup","Administrative","No",
+    "RemovedFromGroup","Administrative","No",
+    "GroupAdded","Administrative","No",
+    "PermissionLevelAdded","Administrative","No",
+    "AddFolderPermissions","Administrative","No",
+    "RemoveFolderPermissions","Administrative","No",
+    "ModifyFolderPermissions","Administrative","No",
+    "SharingInheritanceBroken","Administrative","No",
+    "SharingRevoked","Administrative","No",
+    "FeatureActivated","Administrative","No",
+    "TabAdded","Administrative","No",
+    "TabUpdated","Administrative","No",
+    "TabRemoved","Administrative","No",
+    "AppInstalled","Administrative","No",
+    "AppUninstalled","Administrative","No",
+    "MemberAdded","Administrative","No",
+    "MemberRemoved","Administrative","No",
+    "UserAccepted","Administrative","No",
+    "TeamDeleted","Administrative","No",
+    "AppStoreStorefrontTaskGetApps","Administrative","No",
+    "SiteCollectionCreated","Administrative","No",
+    "SiteCollectionAdminAdded","Administrative","No",
+    "SiteCollectionAdminRemoved","Administrative","No",
+    "SiteLocksChanged","Administrative","No",
+    "SiteCollectionQuotaModified","Administrative","No",
+    "SiteDesignInvoked","Administrative","No",
+    "ListDesignInvoked","Administrative","No",
+    "CommentsDisabled","Administrative","No"
 ];
 OfficeActivity
 | where TimeGenerated >= ago(LookbackPeriod)

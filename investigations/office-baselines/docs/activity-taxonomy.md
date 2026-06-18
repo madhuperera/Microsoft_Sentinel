@@ -31,11 +31,22 @@ the metrics in `docs/methodology.md` are built on a defensible subset.
 | `Content-Collaboration` | ✅ Yes | Interactive viewing, sharing, downloading by a person. |
 | `Teams-Communication` | ✅ Yes | Chat/channel messages by a person. |
 | `Meetings` | ✅ Yes | Joining/participating in meetings. |
-| `Read-Access` | ❌ No | Passive access/preview; heavily background and easily inflated. |
-| `Background-Sync` | ❌ No | OneDrive/SharePoint sync client traffic. |
-| `Administrative` | ❌ No | Admin/config cmdlets — not staff engagement. |
+| `Sharing-Collaboration` | ❌ No¹ | Deliberate sharing actions — creating/updating sharing, company and secure links and grants. Currently excluded; **promotion candidate**. |
+| `Content-Management` | ❌ No | Folder/list structure changes and file housekeeping (create/rename/move folders, list & column edits, thumbnails, copies, checkouts). |
+| `Content-Lifecycle` | ❌ No | Delete / recycle / restore of files, list items and mail (move-to-deleted, soft/hard delete). Ambiguous cleanup, not authored work. |
+| `Mailbox-Activity` | ❌ No | Background-heavy mailbox modifications (Exchange `Update`: flagging, moving, property changes). |
+| `Read-Access` | ❌ No | Passive access/preview, link & token use, read receipts; heavily background and easily inflated. |
+| `Background-Sync` | ❌ No | OneDrive/SharePoint sync client and system-generated uploads (`*Extended`, partial, recording uploads). |
+| `Administrative` | ❌ No | Admin/config, permissions, membership, site & app management — not staff engagement. |
 | `Search` | ❌ No | Search queries — noisy, weak signal. |
-| `Security-Signal` | ❌ No | Tracked elsewhere for security, not engagement. |
+| `Security-Signal` | ❌ No | Sessions, sign-ins and security-posture events — tracked elsewhere, not engagement. |
+
+¹ Some categories carry `EngagementSignal = No` rows that *could* reflect human work
+(`Sharing-Collaboration`, comments under `Content-Collaboration`, the
+`Teams-Communication` message variants, call/meeting records under `Meetings`). These
+are deliberately left **excluded by default** but called out as **promotion candidates**
+during tuning — see the expanded map in
+`queries/drilldown/10-workload-operation-breakdown.kql`.
 
 ## Meaningful operations (`EngagementSignal = Yes`)
 
@@ -76,6 +87,28 @@ These are documented so the exclusions are reviewable; they are **not** counted.
 | AzureActiveDirectory | `UserLoggedIn` | Security-Signal | Sign-ins are measured from `SigninLogs`; avoids double counting. |
 | Exchange | `New-InboxRule` / `Set-*` / `Add-*` | Administrative | Admin/config or security signal, not engagement. |
 | (any) | `SearchQueryPerformed` | Search | Noisy, weak engagement signal. |
+
+The table above is the **curated** short-list — the highest-volume / most important
+exclusions. The **exhaustive observed map** (every operation seen in the tenant, each
+assigned one of the categories above) is maintained inline in
+`queries/drilldown/10-workload-operation-breakdown.kql`. That query exists precisely to
+keep nothing `UNMAPPED`; it is the working surface for tuning, while this file remains
+the definition of the **categories** and the canonical `Yes` set. Representative
+additions classified there:
+
+| Category | Example operations (all `EngagementSignal = No`) |
+|---|---|
+| `Mailbox-Activity` | `Update` |
+| `Background-Sync` | `FileModifiedExtended`, `FileUploadedPartial`, `TeamsMeetingRecordingUploaded` |
+| `Read-Access` | `FileAccessedExtended`, `AttachmentAccess`, `ListViewed`, `PagePrefetched`, `SharingLinkUsed`, `CompanyLinkUsed`, `SecureLinkUsed`, `MessageReadReceiptReceived` |
+| `Content-Lifecycle` | `MoveToDeletedItems`, `SoftDelete`, `HardDelete`, `FileRecycled`, `ListItemDeleted`, `ListItemRestored` |
+| `Content-Management` | `FolderCreated`/`Renamed`/`Moved`, `FileCopied`, `FileCheckedOut`, `List*` create/update/column changes |
+| `Sharing-Collaboration` *(candidate)* | `SharingSet`, `SharingLinkCreated`, `CompanyLinkCreated`, `SecureLinkCreated`, `AddedToSharingLink` |
+| `Content-Collaboration` *(candidate)* | `CommentCreated`, `CommentEdit` |
+| `Teams-Communication` *(candidate)* | `MessageCreatedHasLink`, `MessageEditedHasLink`, `MessageUpdated`, `ReactedToMessage` |
+| `Meetings` *(candidate)* | `CallParticipantDetail`, `MeetingDetail` |
+| `Security-Signal` | `TeamsSessionStarted`, `SignInEvent`, `BaselineSecurityModeThirdPartyAppHPA` |
+| `Administrative` | group/permission/membership changes, `Tab*`/`App*`, `SiteCollection*`, `Sharing(Inheritance)Broken`/`Revoked` |
 
 ## Tuning workflow
 

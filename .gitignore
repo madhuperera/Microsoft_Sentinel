@@ -1,2 +1,5 @@
 # Local Claude Code settings (machine-specific, not shared)
 **/.claude/settings.local.json
+
+# Local development scratch (working data, not shared)
+dev-scratch/

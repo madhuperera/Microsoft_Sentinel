@@ -53,6 +53,10 @@ let MeaningfulOps = dynamic([
 ]);
 // ---------------------------------------------------------------- Full taxonomy (doc + breakdown)
 // Source of truth in docs/activity-taxonomy.md and reference-data/office-activity-taxonomy/.
+// This block is the CURATED canonical model. The exhaustive observed map (every
+// operation seen in the tenant, classified so nothing is UNMAPPED) is maintained in
+// queries/drilldown/10-workload-operation-breakdown.kql. The EngagementSignal = "Yes"
+// rows below must stay identical to MeaningfulOps and to the Yes rows in query 10.
 let Taxonomy = datatable(Workload:string, Operation:string, Category:string, EngagementSignal:string)[
     "Exchange","Send","Email-Communication","Yes",
     "Exchange","SendAs","Email-Communication","Yes",

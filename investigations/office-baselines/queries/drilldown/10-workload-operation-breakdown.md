@@ -26,9 +26,17 @@ Two jobs in one:
 
 1. **Parameters & exclusions** — `ServiceAccountUPNs` (`isfuzzy`), `ExcludedUPNs`.
 
-2. **Inline `Taxonomy` datatable.** A local copy of the operation → category →
-   `EngagementSignal` map (keyed on `Operation` only). *Keep this in sync with
-   `docs/activity-taxonomy.md` and `00-config-and-shared-taxonomy.kql`.*
+2. **Inline `Taxonomy` datatable.** The **expanded (tuning) map** — operation →
+   category → `EngagementSignal`, keyed on `Operation` only. Unlike the metric
+   queries (which carry only the compact `MeaningfulOps` list), this query classifies
+   *every* operation observed in the tenant so nothing lands in `UNMAPPED`.
+   - The `EngagementSignal = Yes` rows are **exactly** the canonical meaningful set
+     and must stay identical to `MeaningfulOps` / `00-config-and-shared-taxonomy.kql`.
+   - Every other operation is given a category but `EngagementSignal = No` (currently
+     excluded). Operations flagged `(candidate)` in the `.kql` comments
+     (`Sharing-Collaboration`, comments, Teams message variants, call/meeting records)
+     are plausible engagement signals a reviewer may choose to promote.
+   - Category names are defined in `docs/activity-taxonomy.md` (source of truth).
 
 3. **Filter & aggregate.** From `OfficeActivity` over `LookbackPeriod`:
    `UserType == "Regular"`, lowercase to `UPN`, **drop guests** (`#ext#`) and
@@ -42,18 +50,27 @@ Two jobs in one:
    labelled.
 
 5. **Project & sort.** `order by toint(EngagementSignal == "UNMAPPED") desc, Events
-   desc` — **unmapped, high-volume operations float to the top**, because those are
-   the tuning candidates.
+   desc` — any **still-unmapped** operation floats to the top. With the expanded map
+   this should now be rare; an `UNMAPPED` row means a genuinely new operation type has
+   appeared in the tenant and needs classifying.
 
 ## How to use it for tuning
 
-1. Look at the top rows: high-volume `UNMAPPED` operations — decide if any genuinely
-   reflect human work and should become `EngagementSignal = Yes`.
-2. Look at operations currently marked `Yes` with suspiciously high volume — possible
-   sync/system contamination to demote.
-3. Apply changes **together** to: `docs/activity-taxonomy.md` (source of truth), this
-   inline datatable, the `MeaningfulOps` lists in the metric queries, and the
-   `reference-data/office-activity-taxonomy` CSV.
+1. **New operations.** Any `UNMAPPED` rows at the top are operation types not yet in
+   the map — classify each (pick the best-fit category, default `EngagementSignal =
+   No`) and add it to the datatable.
+2. **Promotion candidates.** Review the `No` rows whose category implies genuine human
+   activity — `Sharing-Collaboration` (deliberate sharing), `Content-Collaboration`
+   comments, the `Teams-Communication` message variants, and `Meetings`
+   call/meeting records. Decide whether any volume justifies promoting to
+   `EngagementSignal = Yes`.
+3. **Demotion check.** Look at operations currently marked `Yes` with suspiciously high
+   volume — possible sync/system contamination to demote.
+4. Apply any `Yes`/`No` change **together** to: `docs/activity-taxonomy.md` (source of
+   truth), this inline datatable, the `00-config-and-shared-taxonomy.kql` block, the
+   `MeaningfulOps` lists in the metric queries, and the
+   `reference-data/office-activity-taxonomy` CSV — so the canonical engagement set
+   stays identical everywhere.
 
 ## Related
 
