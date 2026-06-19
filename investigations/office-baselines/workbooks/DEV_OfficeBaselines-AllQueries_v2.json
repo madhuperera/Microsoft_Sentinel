@@ -32,7 +32,7 @@
           {
             "id": "e06ac748-b722-4420-ada8-0f3940f64f10",
             "version": "KqlParameterItem/1.0",
-            "value": "leonie.matoe@ratafoundation.org.nz",
+            "value": "",
             "label": "User UPN (drill-down, optional)",
             "name": "W_TargetUser",
             "type": 1
