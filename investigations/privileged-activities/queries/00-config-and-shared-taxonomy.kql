@@ -1,0 +1,129 @@
+// =============================================================================
+// 00 - Config & shared privileged taxonomy (REFERENCE - not a standalone report)
+// -----------------------------------------------------------------------------
+// Purpose
+//   Single place that documents the parameters and the privileged-activity
+//   signals used by every query in this folder. Each query is self-contained (it
+//   repeats the parameters and the compact signal lists it needs) so it runs with
+//   no dependencies. When you tune the model, change it HERE first, then propagate
+//   to the individual queries.
+//
+// What "privileged" means here
+//   We do not have a role-membership feed from these tables, so we cannot say
+//   "this user is an admin". Instead we classify each ACTION by whether the action
+//   itself is administrative / high-impact, per source. Every query carries a
+//   Privileged = "Yes"/"No" column plus a PrivilegeReason so a reviewer can see
+//   WHY a row was highlighted.
+//
+//   For Entra (AuditLogs) we additionally DOWNGRADE self-service actions: when the
+//   actor and the target are the same identity (e.g. a user updating their own
+//   profile or changing their own password), the action is not treated as
+//   privileged even if the operation name is on the list. This keeps admin-on-
+//   another-user actions while dropping benign self-service noise.
+//
+// Data sources : OfficeActivity, AuditLogs (Entra ID), AzureActivity, SigninLogs
+// Advanced Hunting : NOT used. Sentinel / Log Analytics KQL only.
+//
+// (!) Observable telemetry only. A highlighted action is a PROMPT TO ASK A
+//     QUESTION, never proof of misconduct. This is event-level, privacy-sensitive
+//     data - restrict access and review responsibly.
+//     See docs/assumptions-and-limitations.md.
+//
+// The block below is illustrative (it returns the signal lists as a table). Copy
+// the `let` parameters into a query, or just read it as documentation.
+// =============================================================================
+//
+// ---------------------------------------------------------------- Investigation scope
+let TargetUser = "jane.doe@contoso.com";   // UPN to investigate
+let StartTime  = ago(30d);                  // window start - or datetime(2026-05-01)
+let EndTime    = now();                      // window end   - or datetime(2026-06-01)
+//
+// ---------------------------------------------------------------- Entra ID (AuditLogs) signals
+// A directory action is privileged if its Category is in this set ...
+let PrivAuditCategories = dynamic([
+    "RoleManagement","ApplicationManagement","Policy","AuthorizationPolicy","DirectoryManagement"]);
+// ... or its OperationName matches one of these (case-insensitive substring match).
+// NOTE: self-service instances (actor == target) are downgraded in the queries.
+let PrivAuditOps = dynamic([
+    // role / PIM
+    "add member to role","remove member from role","add eligible member to role",
+    "remove eligible member from role","activate role",
+    // app / service principal / consent
+    "add app role assignment","add app role assignment to group","consent to application",
+    "add delegated permission grant","add oauth2permissiongrant",
+    "add service principal","add service principal credentials",
+    "add owner to application","add owner to service principal",
+    // user lifecycle / credentials
+    "reset password","reset user password","change user password","set force change user password",
+    "update user","add user","delete user","restore user","disable account","enable account",
+    // token / MFA / key tamper (high IR value)
+    "update stsrefreshtokenvalidfrom","disable strong authentication","read bitlocker key",
+    // policy / conditional access
+    "add conditional access policy","update conditional access policy",
+    "delete conditional access policy","update policy",
+    // domain / federation
+    "set federation settings on domain","add domain","verify domain",
+    // group membership (noisy - see taxonomy doc; gate on a privileged-group watchlist later)
+    "add member to group","remove member from group"]);
+//
+// ---------------------------------------------------------------- Office 365 (OfficeActivity) signals
+// An O365 action is privileged if the RecordType is an Admin record type, OR the
+// Operation is one of these, OR the Operation looks like an admin cmdlet (verb-noun).
+let PrivOfficeOps = dynamic([
+    // mailbox / delegation / rules / forwarding
+    "add-mailboxpermission","add-recipientpermission","set-mailbox","add-mailboxfolderpermission",
+    "new-inboxrule","set-inboxrule","updateinboxrules",
+    // transport / routing
+    "new-transportrule","set-transportrule","set-transportconfig","set-remotedomain","new-journalrule",
+    "set-casmailbox",
+    // RBAC / org config
+    "add-rolegroupmember","new-rolegroup","new-managementrole","new-managementroleassignment",
+    "add-managementroleentry","set-organizationconfig","set-adminauditlogconfig","add member to role",
+    // compliance / eDiscovery (insider data access)
+    "new-compliancesearch","new-compliancesearchaction","search-mailbox",
+    // SharePoint / OneDrive sharing + admin
+    "anonymouslinkcreated","companylinkcreated","sharinginvitationcreated","securelinkcreated",
+    "sharingset","sitecollectionadminadded","addedtogroup"]);
+// Admin-cmdlet shape. (?i) = case-insensitive so it does not depend on Exchange
+// always emitting PascalCase. Get- (read / recon) is intentionally excluded.
+let PrivOfficeCmdletRegex = @"(?i)^(add|set|new|remove|enable|disable|update|grant|reset)-";
+//
+// ---------------------------------------------------------------- Azure control-plane (AzureActivity) signals
+// We keep only CategoryValue == "Administrative" (user / SPN control-plane changes).
+// Privileged if the resolved action contains a change verb ...
+let PrivAzureActions = dynamic(["/write","/delete","/action"]);
+// ... OR (when Authorization_d.action is empty) the friendly OperationNameValue is
+// one of these sensitive ops that does not contain a change verb in friendly form.
+let PrivAzureFriendlyOps = dynamic([
+    "list storage account keys","regenerate storage account keys",
+    "list service sas","list account sas","initiate jit network access policy"]);
+// HIGH-impact subset: RBAC, PIM-via-ARM, Key Vault, identity, key/secret enumeration.
+let HighPrivAzure = dynamic([
+    "microsoft.authorization/roleassignments","microsoft.authorization/roledefinitions",
+    "microsoft.authorization/roleeligibilityschedulerequests",
+    "microsoft.authorization/roleassignmentschedulerequests",
+    "microsoft.authorization/elevateaccess","microsoft.keyvault","microsoft.managedidentity",
+    "/listkeys/action","liststorageaccountkeys",
+    "microsoft.web/sites/publishxml","microsoft.web/sites/config/list"]);
+//
+// ---------------------------------------------------------------- Sign-in context (SigninLogs)
+// Apps / resources that represent a management surface (admin tooling). Used only
+// to flag sign-ins worth noting in query 04; sign-ins are auth events, not actions.
+let MgmtSurfaceApps = dynamic([
+    "Azure Portal","Microsoft Azure Management","Azure Resource Manager",
+    "Microsoft Graph","Microsoft Graph PowerShell","Azure Active Directory PowerShell",
+    "Windows Azure Service Management API","Microsoft Azure CLI",
+    "Microsoft Exchange Online Remote PowerShell","Microsoft Intune","Microsoft Intune PowerShell",
+    "Microsoft 365 Admin Center","Azure Advanced Threat Protection"]);
+//
+// ---------------------------------------------------------------- Reference output
+// Returns the signal lists as a readable table (documentation aid only).
+union
+    (print SignalSet="Entra/AuditLogs categories",   Value=tostring(PrivAuditCategories)),
+    (print SignalSet="Entra/AuditLogs operations",   Value=tostring(PrivAuditOps)),
+    (print SignalSet="Office365 operations",         Value=tostring(PrivOfficeOps)),
+    (print SignalSet="Office365 admin-cmdlet regex", Value=PrivOfficeCmdletRegex),
+    (print SignalSet="Azure privileged actions",     Value=tostring(PrivAzureActions)),
+    (print SignalSet="Azure friendly sensitive ops", Value=tostring(PrivAzureFriendlyOps)),
+    (print SignalSet="Azure high-impact prefixes",   Value=tostring(HighPrivAzure)),
+    (print SignalSet="Sign-in management surfaces",  Value=tostring(MgmtSurfaceApps))

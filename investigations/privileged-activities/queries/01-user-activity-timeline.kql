@@ -1,0 +1,126 @@
+// =============================================================================
+// 01 - User activity timeline (ALL activity, privileged highlighted)   [PRIMARY]
+// -----------------------------------------------------------------------------
+// Purpose
+//   One chronological view of everything a named user did across the three
+//   action-bearing sources - Microsoft 365 (OfficeActivity), Entra ID directory
+//   (AuditLogs), and Azure control-plane (AzureActivity) - in a chosen window.
+//   Each row carries Privileged = "Yes"/"No" plus a PrivilegeReason so admin /
+//   high-impact actions stand out at a glance.
+//
+//   Sign-ins are authentication events, not actions - see query 04 for the
+//   sign-in / location / MFA context for the same user.
+//
+// Output : one row per action, newest first, with Privileged flag + reason.
+// Usage  : set TargetUser and the StartTime / EndTime window. Nothing else needed.
+//
+// Data sources : OfficeActivity, AuditLogs, AzureActivity
+//
+// (!) Observable telemetry only. A highlighted action is a PROMPT TO REVIEW, not
+//     proof of wrongdoing. Event-level, privacy-sensitive data - handle with care.
+// =============================================================================
+//
+// ---------------------------------------------------------------- Parameters
+let TargetUser = "jane.doe@contoso.com";   // <-- UPN to investigate
+let StartTime  = ago(30d);                  // <-- or datetime(2026-05-01)
+let EndTime    = now();                      // <-- or datetime(2026-06-01)
+// ---------------------------------------------------------------- Privileged signals (see 00-config)
+let PrivAuditCategories = dynamic([
+    "RoleManagement","ApplicationManagement","Policy","AuthorizationPolicy","DirectoryManagement"]);
+let PrivAuditOps = dynamic([
+    "add member to role","remove member from role","add eligible member to role",
+    "remove eligible member from role","activate role","add app role assignment",
+    "add app role assignment to group","consent to application","add delegated permission grant",
+    "add oauth2permissiongrant","add service principal","add service principal credentials",
+    "add owner to application","add owner to service principal","reset password","reset user password",
+    "change user password","set force change user password","update user","add user","delete user",
+    "restore user","disable account","enable account","update stsrefreshtokenvalidfrom",
+    "disable strong authentication","read bitlocker key","add conditional access policy",
+    "update conditional access policy","delete conditional access policy","update policy",
+    "set federation settings on domain","add domain","verify domain",
+    "add member to group","remove member from group"]);
+let PrivOfficeOps = dynamic([
+    "add-mailboxpermission","add-recipientpermission","set-mailbox","add-mailboxfolderpermission",
+    "new-inboxrule","set-inboxrule","updateinboxrules","new-transportrule","set-transportrule",
+    "set-transportconfig","set-remotedomain","new-journalrule","set-casmailbox","add-rolegroupmember",
+    "new-rolegroup","new-managementrole","new-managementroleassignment","add-managementroleentry",
+    "set-organizationconfig","set-adminauditlogconfig","add member to role","new-compliancesearch",
+    "new-compliancesearchaction","search-mailbox","anonymouslinkcreated","companylinkcreated",
+    "sharinginvitationcreated","securelinkcreated","sharingset","sitecollectionadminadded","addedtogroup"]);
+let PrivOfficeCmdletRegex = @"(?i)^(add|set|new|remove|enable|disable|update|grant|reset)-";
+let PrivAzureActions = dynamic(["/write","/delete","/action"]);
+let PrivAzureFriendlyOps = dynamic([
+    "list storage account keys","regenerate storage account keys",
+    "list service sas","list account sas","initiate jit network access policy"]);
+let HighPrivAzure = dynamic([
+    "microsoft.authorization/roleassignments","microsoft.authorization/roledefinitions",
+    "microsoft.authorization/roleeligibilityschedulerequests",
+    "microsoft.authorization/roleassignmentschedulerequests",
+    "microsoft.authorization/elevateaccess","microsoft.keyvault","microsoft.managedidentity",
+    "/listkeys/action","liststorageaccountkeys",
+    "microsoft.web/sites/publishxml","microsoft.web/sites/config/list"]);
+// ---------------------------------------------------------------- Office 365 actions
+let Office =
+    OfficeActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | extend Actor = tolower(tostring(UserId))
+    | where Actor == tolower(TargetUser)
+    | extend OpLower = tolower(Operation)
+    | extend IsPriv = (RecordType has "Admin")
+                      or (OpLower has_any (PrivOfficeOps))
+                      or (Operation matches regex PrivOfficeCmdletRegex)
+    | extend PrivilegeReason = case(
+        not(IsPriv),                            "",
+        RecordType has "Admin",                 strcat("Admin record type: ", RecordType),
+        OpLower has_any (PrivOfficeOps),        "Sensitive O365 operation",
+        "Admin cmdlet")
+    | project TimeGenerated, Source = "Office365", Actor,
+              Category = OfficeWorkload, Operation,
+              Privileged = iff(IsPriv, "Yes", "No"), PrivilegeReason,
+              Result = ResultStatus, ClientIP, Target = OfficeObjectId, Details = Parameters;
+// ---------------------------------------------------------------- Entra ID directory actions
+let Entra =
+    AuditLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | extend Actor = tolower(tostring(InitiatedBy.user.userPrincipalName))
+    | where Actor == tolower(TargetUser)
+    | extend OpLower = tolower(OperationName)
+    | extend ActorId = tostring(InitiatedBy.user.id)
+    | extend SelfService = isnotempty(ActorId) and ActorId == tostring(TargetResources[0].id)
+    | extend IsPrivRaw = (Category in (PrivAuditCategories)) or (OpLower has_any (PrivAuditOps))
+    | extend IsPriv = IsPrivRaw and not(SelfService)
+    | extend PrivilegeReason = case(
+        not(IsPriv),                       "",
+        Category in (PrivAuditCategories), strcat("Privileged category: ", Category),
+        "Sensitive directory operation")
+    | project TimeGenerated, Source = "EntraID", Actor,
+              Category, Operation = OperationName,
+              Privileged = iff(IsPriv, "Yes", "No"), PrivilegeReason,
+              Result = tostring(Result),
+              ClientIP = tostring(InitiatedBy.user.ipAddress),
+              Target = tostring(TargetResources[0].displayName),
+              Details = tostring(TargetResources);
+// ---------------------------------------------------------------- Azure control-plane actions
+let Azure =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where CategoryValue == "Administrative"
+    | extend Actor = tolower(Caller)
+    | where Actor == tolower(TargetUser)
+    | extend AzAction = tostring(Authorization_d.action)
+    | extend ActionStr = tolower(iif(isempty(AzAction), OperationNameValue, AzAction))
+    | extend OpFriendly = tolower(OperationNameValue)
+    | extend IsPriv = (ActionStr has_any (PrivAzureActions)) or (OpFriendly has_any (PrivAzureFriendlyOps))
+    | extend PrivilegeReason = case(
+        not(IsPriv),                                                              "",
+        (ActionStr has_any (HighPrivAzure)) or (OpFriendly has_any (PrivAzureFriendlyOps)),
+            "High-impact Azure action (RBAC / Key Vault / keys / identity)",
+        "Azure resource change (write / delete / action)")
+    | project TimeGenerated, Source = "Azure", Actor,
+              Category = ResourceProviderValue, Operation = OperationNameValue,
+              Privileged = iff(IsPriv, "Yes", "No"), PrivilegeReason,
+              Result = ActivityStatusValue, ClientIP = CallerIpAddress,
+              Target = _ResourceId, Details = tostring(Properties_d);
+// ---------------------------------------------------------------- Unified timeline
+union Office, Entra, Azure
+| order by TimeGenerated desc

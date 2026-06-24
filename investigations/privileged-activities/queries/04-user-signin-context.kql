@@ -1,0 +1,49 @@
+// =============================================================================
+// 04 - User sign-in context (where / when / how they authenticated)  [CONTEXT]
+// -----------------------------------------------------------------------------
+// Purpose
+//   Sign-ins are authentication events, not actions, so they are kept out of the
+//   activity timeline (01/03). This query gives the supporting context for the
+//   same user: when and from where they signed in, on what client, whether MFA /
+//   Conditional Access applied, and whether the sign-in targeted a management
+//   surface (admin tooling such as the Azure Portal or Graph PowerShell).
+//
+//   Use it alongside 01/03 to answer "was this privileged action performed from a
+//   normal device / location / client, or from somewhere unexpected?"
+//
+// Output : one row per interactive sign-in, newest first.
+// Usage  : set TargetUser and the StartTime / EndTime window.
+//
+// Data sources : SigninLogs
+//
+// (!) Observable telemetry only. MgmtSurface = "Yes" means the user signed in to
+//     admin tooling - it does NOT by itself mean they changed anything. Correlate
+//     with 01/03 for actual actions. Privacy-sensitive data - handle with care.
+// =============================================================================
+//
+// ---------------------------------------------------------------- Parameters
+let TargetUser = "jane.doe@contoso.com";   // <-- UPN to investigate
+let StartTime  = ago(30d);                  // <-- or datetime(2026-05-01)
+let EndTime    = now();                      // <-- or datetime(2026-06-01)
+// ---------------------------------------------------------------- Management-surface apps (see 00-config)
+let MgmtSurfaceApps = dynamic([
+    "Azure Portal","Microsoft Azure Management","Azure Resource Manager",
+    "Microsoft Graph","Microsoft Graph PowerShell","Azure Active Directory PowerShell",
+    "Windows Azure Service Management API","Microsoft Azure CLI",
+    "Microsoft Exchange Online Remote PowerShell","Microsoft Intune","Microsoft Intune PowerShell",
+    "Microsoft 365 Admin Center","Azure Advanced Threat Protection"]);
+// ---------------------------------------------------------------- Sign-ins
+SigninLogs
+| where TimeGenerated between (StartTime .. EndTime)
+| where tolower(UserPrincipalName) == tolower(TargetUser)
+| extend MgmtSurface = iff((AppDisplayName has_any (MgmtSurfaceApps))
+                            or (ResourceDisplayName has_any (MgmtSurfaceApps)), "Yes", "No")
+| project TimeGenerated, UserPrincipalName,
+          App = AppDisplayName, Resource = ResourceDisplayName, MgmtSurface,
+          Status = iff(ResultType == "0", "Success", strcat("Failure (", ResultType, ")")),
+          IPAddress, Country = Location, City = tostring(LocationDetails.city),
+          ClientApp = ClientAppUsed,
+          OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser),
+          MFA = AuthenticationRequirement, ConditionalAccess = ConditionalAccessStatus,
+          Risk = RiskLevelDuringSignIn
+| order by TimeGenerated desc

@@ -1,0 +1,89 @@
+// =============================================================================
+// 02 - User activity summary (overview before the timeline)          [OVERVIEW]
+// -----------------------------------------------------------------------------
+// Purpose
+//   A compact summary of what a named user did in the window: counts per source
+//   and category, how many of those were privileged, and the first / last time
+//   seen. Run this first to get the shape of the activity, then open query 01
+//   (full timeline) or query 03 (privileged only) to drill in.
+//
+// Output : one row per Source + Category, with Events, PrivilegedEvents, span.
+// Usage  : set TargetUser and the StartTime / EndTime window.
+//
+// Data sources : OfficeActivity, AuditLogs, AzureActivity
+//
+// (!) Observable telemetry only. Privileged counts are review signals, not a
+//     verdict. See docs/assumptions-and-limitations.md.
+// =============================================================================
+//
+// ---------------------------------------------------------------- Parameters
+let TargetUser = "jane.doe@contoso.com";   // <-- UPN to investigate
+let StartTime  = ago(30d);                  // <-- or datetime(2026-05-01)
+let EndTime    = now();                      // <-- or datetime(2026-06-01)
+// ---------------------------------------------------------------- Privileged signals (see 00-config)
+let PrivAuditCategories = dynamic([
+    "RoleManagement","ApplicationManagement","Policy","AuthorizationPolicy","DirectoryManagement"]);
+let PrivAuditOps = dynamic([
+    "add member to role","remove member from role","add eligible member to role",
+    "remove eligible member from role","activate role","add app role assignment",
+    "add app role assignment to group","consent to application","add delegated permission grant",
+    "add oauth2permissiongrant","add service principal","add service principal credentials",
+    "add owner to application","add owner to service principal","reset password","reset user password",
+    "change user password","set force change user password","update user","add user","delete user",
+    "restore user","disable account","enable account","update stsrefreshtokenvalidfrom",
+    "disable strong authentication","read bitlocker key","add conditional access policy",
+    "update conditional access policy","delete conditional access policy","update policy",
+    "set federation settings on domain","add domain","verify domain",
+    "add member to group","remove member from group"]);
+let PrivOfficeOps = dynamic([
+    "add-mailboxpermission","add-recipientpermission","set-mailbox","add-mailboxfolderpermission",
+    "new-inboxrule","set-inboxrule","updateinboxrules","new-transportrule","set-transportrule",
+    "set-transportconfig","set-remotedomain","new-journalrule","set-casmailbox","add-rolegroupmember",
+    "new-rolegroup","new-managementrole","new-managementroleassignment","add-managementroleentry",
+    "set-organizationconfig","set-adminauditlogconfig","add member to role","new-compliancesearch",
+    "new-compliancesearchaction","search-mailbox","anonymouslinkcreated","companylinkcreated",
+    "sharinginvitationcreated","securelinkcreated","sharingset","sitecollectionadminadded","addedtogroup"]);
+let PrivOfficeCmdletRegex = @"(?i)^(add|set|new|remove|enable|disable|update|grant|reset)-";
+let PrivAzureActions = dynamic(["/write","/delete","/action"]);
+let PrivAzureFriendlyOps = dynamic([
+    "list storage account keys","regenerate storage account keys",
+    "list service sas","list account sas","initiate jit network access policy"]);
+// ---------------------------------------------------------------- Office 365
+let Office =
+    OfficeActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where tolower(tostring(UserId)) == tolower(TargetUser)
+    | extend OpLower = tolower(Operation)
+    | extend IsPriv = (RecordType has "Admin") or (OpLower has_any (PrivOfficeOps))
+                      or (Operation matches regex PrivOfficeCmdletRegex)
+    | project TimeGenerated, Source = "Office365", Category = OfficeWorkload, IsPriv;
+// ---------------------------------------------------------------- Entra ID directory
+let Entra =
+    AuditLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where tolower(tostring(InitiatedBy.user.userPrincipalName)) == tolower(TargetUser)
+    | extend SelfService = isnotempty(tostring(InitiatedBy.user.id))
+                           and tostring(InitiatedBy.user.id) == tostring(TargetResources[0].id)
+    | extend IsPriv = ((Category in (PrivAuditCategories)) or (tolower(OperationName) has_any (PrivAuditOps)))
+                      and not(SelfService)
+    | project TimeGenerated, Source = "EntraID", Category, IsPriv;
+// ---------------------------------------------------------------- Azure control-plane
+let Azure =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where CategoryValue == "Administrative"
+    | where tolower(Caller) == tolower(TargetUser)
+    | extend AzAction = tostring(Authorization_d.action)
+    | extend ActionStr = tolower(iif(isempty(AzAction), OperationNameValue, AzAction))
+    | extend IsPriv = (ActionStr has_any (PrivAzureActions))
+                      or (tolower(OperationNameValue) has_any (PrivAzureFriendlyOps))
+    | project TimeGenerated, Source = "Azure", Category = ResourceProviderValue, IsPriv;
+// ---------------------------------------------------------------- Summary
+union Office, Entra, Azure
+| summarize Events = count(),
+            PrivilegedEvents = countif(IsPriv),
+            FirstSeen = min(TimeGenerated),
+            LastSeen  = max(TimeGenerated)
+        by Source, Category
+| extend PrivilegedPct = round(100.0 * PrivilegedEvents / Events, 1)
+| order by PrivilegedEvents desc, Events desc
