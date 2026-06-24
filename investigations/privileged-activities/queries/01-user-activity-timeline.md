@@ -4,17 +4,18 @@
 **Type:** Primary report
 **Output:** one row per action across Office 365, Entra ID, and Azure - newest first
 
-> Observable telemetry only. A highlighted action is a **prompt to review**, not
+> Observable telemetry only. A classified action is a **prompt to review**, not
 > proof of wrongdoing. Event-level, privacy-sensitive data - handle with care.
 
 ## What it answers
 
-> "Show me everything this user did in this period, and highlight anything
-> administrative or privileged."
+> "Show me everything this user did in this period, and classify it so admin and
+> high-risk actions stand out."
 
 It unions the three **action-bearing** sources into one chronological timeline and
-flags each row `Privileged = Yes/No` with a reason. Sign-ins (authentication, not
-actions) are deliberately excluded - see query 04 for that context.
+gives every row an `ActivityClass` and a `Severity`. **Normal activity is kept** -
+classification enriches the timeline, it does not filter it. Sign-ins
+(authentication, not actions) are excluded - see query 04.
 
 ## Parameters
 
@@ -30,59 +31,55 @@ actions) are deliberately excluded - see query 04 for that context.
 |---|---|
 | `TimeGenerated` | When the action occurred (UTC). |
 | `Source` | `Office365`, `EntraID`, or `Azure`. |
-| `Actor` | The user's UPN (lower-cased), confirming attribution. |
+| `Actor` | The user's UPN (lower-cased). |
+| `ActivityClass` | The classification (see `../docs/privileged-operations-taxonomy.md`). |
+| `Severity` | `High` / `Medium` / `Low` / `Info`, after the failed-attempt downgrade. |
+| `Outcome` | `Success` / `Failure` / `Other`, derived from the source result. |
 | `Category` | O365 workload / Entra category / Azure resource provider. |
 | `Operation` | The specific action. |
-| `Privileged` | `Yes` if administrative / high-impact, else `No`. |
-| `PrivilegeReason` | Why it was flagged (blank when `No`). |
-| `Result` | Success / failure status as reported by the source. |
-| `ClientIP` | Source IP where the source records it. |
+| `Result` | Raw status from the source. |
+| `ClientIP` | Source IP where recorded. |
 | `Target` | Object acted on (file/site, directory target, Azure resource id). |
 | `Details` | Raw parameters / target resources / properties for drill-down. |
+| `SeverityRank` | 3/2/1/0 for High/Medium/Low/Info (for workbook sorting). |
 
 ## Step by step
 
-1. **Parameters** - `TargetUser`, `StartTime`, `EndTime`, and the privileged
-   signal lists (copied from `00-config`).
-
-2. **Three per-source sub-queries**, each filtered to the window and to the user
-   on that source's own actor field:
-   - **Office 365** (`OfficeActivity`): actor = `UserId`. Privileged when the
-     `RecordType` is an Admin type, the `Operation` is in `PrivOfficeOps`, or the
-     `Operation` looks like an admin cmdlet (`Add-`/`Set-`/`New-`/...).
-   - **Entra ID** (`AuditLogs`): actor = `InitiatedBy.user.userPrincipalName`.
-     Privileged when `Category` is in `PrivAuditCategories` or `OperationName`
-     matches `PrivAuditOps`, **and** the action is not self-service - self-service
-     is detected as `InitiatedBy.user.id == TargetResources[0].id` (actor acting on
-     their own object) and downgraded to `Privileged = No`.
-   - **Azure** (`AzureActivity`): actor = `Caller`; restricted to
-     `CategoryValue == "Administrative"`. Privileged when the resolved action
-     (`Authorization_d.action`, else `OperationNameValue`) contains `/write`,
-     `/delete`, or `/action`, **or** the friendly `OperationNameValue` is in
-     `PrivAzureFriendlyOps` (e.g. "List Storage Account Keys"); high-impact when it
-     touches RBAC, PIM-via-ARM, Key Vault, managed identity, key enumeration, or
-     App Service publish profiles.
-
-3. **Normalise** each sub-query to the same column shape, then `union` and
-   `order by TimeGenerated desc`.
+1. **Parameters** and the per-source signal lists (copied from `00-config`).
+2. **Three per-source sub-queries**, each filtered to the window and the user on
+   that source's own actor field, each producing an `ActivityClass`:
+   - **Office 365** (`OfficeActivity`, actor `UserId`): curated role / security-
+     config / data-exposure lists; otherwise admin `RecordType` or admin-cmdlet
+     shape -> "Possible admin activity (review)"; else "Normal user activity".
+   - **Entra ID** (`AuditLogs`, actor `InitiatedBy.user.userPrincipalName`):
+     **operation-name primary** mapping to role / app / policy / identity classes;
+     self-service (`InitiatedBy.user.id == TargetResources[0].id`) drops to normal;
+     group ops -> "Requires manual review"; `Category` is a low-confidence
+     secondary net only.
+   - **Azure** (`AzureActivity`, actor `Caller`, `Administrative` only): expanded
+     high-impact list -> "High-impact Azure control-plane change"; other changes ->
+     "Azure control-plane change".
+3. **`union`**, then derive `BaseSeverity` from the class, `Outcome` from `Result`,
+   and `Severity` (downgrade one level on failure).
+4. **Sort** `order by TimeGenerated desc` (newest first).
 
 ## How to read it
 
-- Scan the `Privileged` column first. A run of `Yes` rows from `EntraID`
-  (RoleManagement) or `Azure` (RBAC) is the kind of thing the client is asking
-  about.
-- A privileged action is **not** automatically a problem - many are expected of
-  the role. Correlate the time and `ClientIP` with query 04 (sign-in context) to
-  see whether it came from a normal device / location.
-- Use the `Details` column, or query 03 for the privileged-only view.
+- Filter or sort on `Severity` / `ActivityClass`. `High` rows in
+  `Privileged role/RBAC change`, `App/consent/service principal change`, or
+  `High-impact Azure control-plane change` are the headline items.
+- A classified action is not automatically a problem - correlate the time and
+  `ClientIP` with query 04 (sign-in context).
+- `Outcome == "Failure"` rows are kept but ranked lower - useful for spotting
+  attempted-but-blocked privileged actions.
 
 ## Notes
 
 - Because you choose the user explicitly, there is **no** service-account or guest
-  exclusion - this is a targeted lens, you decide who to inspect.
-- The Azure sub-query intentionally keeps only `Administrative` category events;
-  ServiceHealth / Recommendation / Alert noise is dropped.
+  exclusion - this is a targeted lens.
+- Scope is control-plane / audit only; see the limitation header in the query and
+  `../docs/assumptions-and-limitations.md`.
 
 ## Related
 
-`02` (summary first) - `03` (privileged only) - `04` (sign-in context).
+`02` (summary first) - `03` (flagged only) - `04` (sign-in context).

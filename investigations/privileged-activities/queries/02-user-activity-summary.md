@@ -2,18 +2,18 @@
 
 **Companion to:** `02-user-activity-summary.kql`
 **Type:** Overview
-**Output:** one row per Source + Category, with event and privileged counts
+**Output:** one row per Source + ActivityClass + Severity, with counts and span
 
-> Observable telemetry only. Privileged counts are review signals, not a verdict.
+> Observable telemetry only. Class / severity are review signals, not a verdict.
 
 ## What it answers
 
-> "Before I read every line - roughly what did this user touch, where, and how
-> much of it was privileged?"
+> "Before I read every line - what did this user touch, how was it classified, and
+> how severe?"
 
-Run this **first**. It gives the shape of the activity so you know which sources
-and categories are worth drilling into with query 01 (full timeline) or query 03
-(privileged only).
+Run this **first**. It shows the shape of the activity so you know which classes
+and severities are worth drilling into with query 01 (full timeline) or query 03
+(flagged only).
 
 ## Parameters
 
@@ -24,29 +24,30 @@ Same as query 01: `TargetUser`, `StartTime`, `EndTime`.
 | Column | Meaning |
 |---|---|
 | `Source` | `Office365`, `EntraID`, or `Azure`. |
-| `Category` | O365 workload / Entra category / Azure resource provider. |
-| `Events` | Total in-scope actions for that source + category. |
-| `PrivilegedEvents` | How many of those were flagged privileged. |
-| `FirstSeen` / `LastSeen` | Time span of activity in that bucket (UTC). |
-| `PrivilegedPct` | `PrivilegedEvents / Events` as a percentage. |
+| `ActivityClass` | The classification bucket. |
+| `Severity` | Derived severity (after failed-attempt downgrade). |
+| `Events` | Count of actions in that Source + class + severity. |
+| `FirstSeen` / `LastSeen` | Time span of that bucket (UTC). |
+| `SeverityRank` | 3/2/1/0 for ordering. |
 
 ## Step by step
 
-1. **Parameters** and the privileged signal lists (as in query 01).
-2. The same three per-source sub-queries as query 01, but each projects only
-   `TimeGenerated, Source, Category, IsPriv` (no detail columns).
-3. `union`, then `summarize` to counts and the time span **by `Source,
-   Category`**, add `PrivilegedPct`, and `order by PrivilegedEvents desc`.
+1. **Parameters** and the signal lists (as in query 01).
+2. The same three per-source sub-queries, projecting only `TimeGenerated, Source,
+   ActivityClass, Result`.
+3. `union`, derive `Severity` (class base + failure downgrade), then `summarize`
+   counts and the time span **by `Source, ActivityClass, Severity`**, and
+   `order by SeverityRank desc, Events desc`.
 
 ## How to read it
 
-- Rows with a high `PrivilegedEvents` (or `PrivilegedPct`) are where to look
-  first; open query 03 for those.
-- `EntraID` / `RoleManagement`, `Azure` / `Microsoft.Authorization`, and O365
-  admin categories are the usual high-signal buckets.
-- A user with **only** `Privileged = 0` rows across all sources did no
-  administrative action in the window (per these signals).
+- The top rows are the highest-severity buckets - open query 03 for those.
+- `High` rows in `Privileged role/RBAC change`, `App/consent/service principal
+  change`, `Privileged policy/security config change`, or `High-impact Azure
+  control-plane change` are the buckets the client most cares about.
+- A user whose rows are all `Normal user activity` / `Info` did nothing
+  administrative or high-risk in the window (per the current signals).
 
 ## Related
 
-`01` (full timeline) - `03` (privileged only) - `04` (sign-in context).
+`01` (full timeline) - `03` (flagged only) - `04` (sign-in context).

@@ -1,22 +1,26 @@
 // =============================================================================
-// 01 - User activity timeline (ALL activity, privileged highlighted)   [PRIMARY]
+// 01 - User activity timeline (ALL activity, classified)               [PRIMARY]
 // -----------------------------------------------------------------------------
 // Purpose
 //   One chronological view of everything a named user did across the three
 //   action-bearing sources - Microsoft 365 (OfficeActivity), Entra ID directory
 //   (AuditLogs), and Azure control-plane (AzureActivity) - in a chosen window.
-//   Each row carries Privileged = "Yes"/"No" plus a PrivilegeReason so admin /
-//   high-impact actions stand out at a glance.
+//   Each row gets an ActivityClass and a Severity so administrative, high-risk,
+//   and normal activity are distinguished (not collapsed into one flag). Normal
+//   activity is kept in the timeline; classification enriches, it does not filter.
 //
-//   Sign-ins are authentication events, not actions - see query 04 for the
-//   sign-in / location / MFA context for the same user.
+//   Sign-ins are authentication events, not actions - see query 04.
 //
-// Output : one row per action, newest first, with Privileged flag + reason.
+// Output : one row per action, newest first, with ActivityClass + Severity + Outcome.
 // Usage  : set TargetUser and the StartTime / EndTime window. Nothing else needed.
 //
-// Data sources : OfficeActivity, AuditLogs, AzureActivity
+// SCOPE / LIMITATION: based ONLY on SigninLogs, OfficeActivity, AuditLogs, and
+//   AzureActivity. AzureActivity is CONTROL-PLANE ONLY (no data-plane access such
+//   as Key Vault secret reads, Storage blob reads, or mailbox/file content). Not
+//   full coverage. Classification is operation-name primary for Entra; the
+//   AuditLogs Category net is a low-confidence secondary - validate per tenant.
 //
-// (!) Observable telemetry only. A highlighted action is a PROMPT TO REVIEW, not
+// (!) Observable telemetry only. A classified action is a PROMPT TO REVIEW, not
 //     proof of wrongdoing. Event-level, privacy-sensitive data - handle with care.
 // =============================================================================
 //
@@ -24,29 +28,52 @@
 let TargetUser = "jane.doe@contoso.com";   // <-- UPN to investigate
 let StartTime  = ago(30d);                  // <-- or datetime(2026-05-01)
 let EndTime    = now();                      // <-- or datetime(2026-06-01)
-// ---------------------------------------------------------------- Privileged signals (see 00-config)
-let PrivAuditCategories = dynamic([
-    "RoleManagement","ApplicationManagement","Policy","AuthorizationPolicy","DirectoryManagement"]);
-let PrivAuditOps = dynamic([
+// ---------------------------------------------------------------- Signals (see 00-config)
+let EntraRoleOps = dynamic([
     "add member to role","remove member from role","add eligible member to role",
-    "remove eligible member from role","activate role","add app role assignment",
-    "add app role assignment to group","consent to application","add delegated permission grant",
-    "add oauth2permissiongrant","add service principal","add service principal credentials",
-    "add owner to application","add owner to service principal","reset password","reset user password",
-    "change user password","set force change user password","update user","add user","delete user",
-    "restore user","disable account","enable account","update stsrefreshtokenvalidfrom",
-    "disable strong authentication","read bitlocker key","add conditional access policy",
-    "update conditional access policy","delete conditional access policy","update policy",
-    "set federation settings on domain","add domain","verify domain",
-    "add member to group","remove member from group"]);
-let PrivOfficeOps = dynamic([
-    "add-mailboxpermission","add-recipientpermission","set-mailbox","add-mailboxfolderpermission",
+    "remove eligible member from role","add scoped member to role","remove scoped member from role",
+    "add role definition","update role definition","delete role definition",
+    "add role assignment to role definition","remove role assignment from role definition",
+    "add eligibleroleassignment to roledefinition","activate role","elevate access",
+    "add member to role in pim","add member to role approval requested"]);
+let EntraAppOps = dynamic([
+    "consent to application","add delegated permission grant","add oauth2permissiongrant",
+    "add app role assignment","add service principal","add service principal credentials",
+    "certificates and secrets management",
+    "add owner to application","add owner to service principal","update service principal",
+    "set verified publisher","add key to application","add password to application"]);
+let EntraPolicyOps = dynamic([
+    "conditional access","add policy","update policy","delete policy","update authorization policy",
+    "authentication methods policy","authentication method policy","authentication strength policy",
+    "mfa service policy update","update sign-in risk policy","update user risk and mfa registration policy",
+    "security defaults","set company information","set federation settings on domain",
+    "add domain","update domain","verify domain","remove domain",
+    "add partner to cross-tenant access setting","update cross-tenant access setting",
+    "set device registration policies","disable strong authentication",
+    "update stsrefreshtokenvalidfrom","read bitlocker key"]);
+let EntraIdentityOps = dynamic([
+    "add user","delete user","restore user","hard delete user","update user","disable account",
+    "enable account","reset password","reset user password","change user password",
+    "set force change user password","create application password for user","change user license",
+    "set user manager","convert federated user to managed"]);
+let EntraReviewOps = dynamic([
+    "add member to group","remove member from group","add owner to group",
+    "add group","update group","delete group"]);
+let PrivAuditCategoriesSecondary = dynamic([
+    "RoleManagement","ApplicationManagement","Policy","AuthorizationPolicy","DirectoryManagement"]);
+let OfficeRoleOps = dynamic([
+    "add-rolegroupmember","new-rolegroup","new-managementrole","new-managementroleassignment",
+    "set-managementroleassignment","add-managementroleentry","add member to role","sitecollectionadminadded"]);
+let OfficeSecurityCfgOps = dynamic([
+    "add-mailboxpermission","add-recipientpermission","add-mailboxfolderpermission","set-mailbox",
     "new-inboxrule","set-inboxrule","updateinboxrules","new-transportrule","set-transportrule",
-    "set-transportconfig","set-remotedomain","new-journalrule","set-casmailbox","add-rolegroupmember",
-    "new-rolegroup","new-managementrole","new-managementroleassignment","add-managementroleentry",
-    "set-organizationconfig","set-adminauditlogconfig","add member to role","new-compliancesearch",
-    "new-compliancesearchaction","search-mailbox","anonymouslinkcreated","companylinkcreated",
-    "sharinginvitationcreated","securelinkcreated","sharingset","sitecollectionadminadded","addedtogroup"]);
+    "set-transportconfig","set-remotedomain","new-journalrule","new-inboundconnector","new-outboundconnector",
+    "set-inboundconnector","set-outboundconnector","set-casmailbox","set-organizationconfig",
+    "set-adminauditlogconfig","new-dlpcompliancepolicy","set-dlpcompliancepolicy",
+    "new-retentioncompliancepolicy","set-retentioncompliancepolicy"]);
+let OfficeExposureOps = dynamic([
+    "anonymouslinkcreated","companylinkcreated","securelinkcreated","sharinginvitationcreated",
+    "sharingset","addedtogroup","new-compliancesearch","new-compliancesearchaction","search-mailbox"]);
 let PrivOfficeCmdletRegex = @"(?i)^(add|set|new|remove|enable|disable|update|grant|reset)-";
 let PrivAzureActions = dynamic(["/write","/delete","/action"]);
 let PrivAzureFriendlyOps = dynamic([
@@ -54,10 +81,15 @@ let PrivAzureFriendlyOps = dynamic([
     "list service sas","list account sas","initiate jit network access policy"]);
 let HighPrivAzure = dynamic([
     "microsoft.authorization/roleassignments","microsoft.authorization/roledefinitions",
-    "microsoft.authorization/roleeligibilityschedulerequests",
-    "microsoft.authorization/roleassignmentschedulerequests",
-    "microsoft.authorization/elevateaccess","microsoft.keyvault","microsoft.managedidentity",
-    "/listkeys/action","liststorageaccountkeys",
+    "microsoft.authorization/roleeligibilityschedulerequests","microsoft.authorization/roleassignmentschedulerequests",
+    "microsoft.authorization/elevateaccess","microsoft.authorization/policyassignments",
+    "microsoft.keyvault","microsoft.managedidentity",
+    "microsoft.insights/diagnosticsettings","microsoft.aadiam/diagnosticsettings",
+    "microsoft.securityinsights","microsoft.security/","microsoft.operationalinsights/workspaces",
+    "microsoft.compute/virtualmachines/extensions","microsoft.compute/virtualmachines/runcommand",
+    "microsoft.automation/automationaccounts","microsoft.network/networksecuritygroups",
+    "microsoft.network/routetables","microsoft.network/azurefirewalls","microsoft.network/privateendpoints",
+    "microsoft.management/managementgroups","/listkeys/action","liststorageaccountkeys",
     "microsoft.web/sites/publishxml","microsoft.web/sites/config/list"]);
 // ---------------------------------------------------------------- Office 365 actions
 let Office =
@@ -66,18 +98,15 @@ let Office =
     | extend Actor = tolower(tostring(UserId))
     | where Actor == tolower(TargetUser)
     | extend OpLower = tolower(Operation)
-    | extend IsPriv = (RecordType has "Admin")
-                      or (OpLower has_any (PrivOfficeOps))
-                      or (Operation matches regex PrivOfficeCmdletRegex)
-    | extend PrivilegeReason = case(
-        not(IsPriv),                            "",
-        RecordType has "Admin",                 strcat("Admin record type: ", RecordType),
-        OpLower has_any (PrivOfficeOps),        "Sensitive O365 operation",
-        "Admin cmdlet")
-    | project TimeGenerated, Source = "Office365", Actor,
-              Category = OfficeWorkload, Operation,
-              Privileged = iff(IsPriv, "Yes", "No"), PrivilegeReason,
-              Result = ResultStatus, ClientIP, Target = OfficeObjectId, Details = Parameters;
+    | extend ActivityClass = case(
+        OpLower has_any (OfficeRoleOps),        "Privileged role/RBAC change",
+        OpLower has_any (OfficeSecurityCfgOps), "Privileged policy/security config change",
+        OpLower has_any (OfficeExposureOps),    "High-risk sharing/data exposure",
+        (RecordType has "Admin") or (Operation matches regex PrivOfficeCmdletRegex), "Possible admin activity (review)",
+        "Normal user activity")
+    | project TimeGenerated, Source = "Office365", Actor, ActivityClass,
+              Category = OfficeWorkload, Operation, Result = ResultStatus,
+              ClientIP, Target = OfficeObjectId, Details = Parameters;
 // ---------------------------------------------------------------- Entra ID directory actions
 let Entra =
     AuditLogs
@@ -87,19 +116,19 @@ let Entra =
     | extend OpLower = tolower(OperationName)
     | extend ActorId = tostring(InitiatedBy.user.id)
     | extend SelfService = isnotempty(ActorId) and ActorId == tostring(TargetResources[0].id)
-    | extend IsPrivRaw = (Category in (PrivAuditCategories)) or (OpLower has_any (PrivAuditOps))
-    | extend IsPriv = IsPrivRaw and not(SelfService)
-    | extend PrivilegeReason = case(
-        not(IsPriv),                       "",
-        Category in (PrivAuditCategories), strcat("Privileged category: ", Category),
-        "Sensitive directory operation")
-    | project TimeGenerated, Source = "EntraID", Actor,
-              Category, Operation = OperationName,
-              Privileged = iff(IsPriv, "Yes", "No"), PrivilegeReason,
-              Result = tostring(Result),
+    | extend ActivityClass = case(
+        OpLower has_any (EntraRoleOps),   "Privileged role/RBAC change",
+        OpLower has_any (EntraAppOps),    "App/consent/service principal change",
+        OpLower has_any (EntraPolicyOps), "Privileged policy/security config change",
+        OpLower has_any (EntraIdentityOps) and not(SelfService), "User/group/identity admin change",
+        OpLower has_any (EntraIdentityOps) and SelfService,      "Normal user activity",
+        OpLower has_any (EntraReviewOps), "Requires manual review",
+        Category in (PrivAuditCategoriesSecondary), "Possible admin activity (review)",
+        "Normal user activity")
+    | project TimeGenerated, Source = "EntraID", Actor, ActivityClass,
+              Category, Operation = OperationName, Result = tostring(Result),
               ClientIP = tostring(InitiatedBy.user.ipAddress),
-              Target = tostring(TargetResources[0].displayName),
-              Details = tostring(TargetResources);
+              Target = tostring(TargetResources[0].displayName), Details = tostring(TargetResources);
 // ---------------------------------------------------------------- Azure control-plane actions
 let Azure =
     AzureActivity
@@ -110,17 +139,32 @@ let Azure =
     | extend AzAction = tostring(Authorization_d.action)
     | extend ActionStr = tolower(iif(isempty(AzAction), OperationNameValue, AzAction))
     | extend OpFriendly = tolower(OperationNameValue)
-    | extend IsPriv = (ActionStr has_any (PrivAzureActions)) or (OpFriendly has_any (PrivAzureFriendlyOps))
-    | extend PrivilegeReason = case(
-        not(IsPriv),                                                              "",
+    | extend IsChange = (ActionStr has_any (PrivAzureActions)) or (OpFriendly has_any (PrivAzureFriendlyOps))
+    | extend ActivityClass = case(
         (ActionStr has_any (HighPrivAzure)) or (OpFriendly has_any (PrivAzureFriendlyOps)),
-            "High-impact Azure action (RBAC / Key Vault / keys / identity)",
-        "Azure resource change (write / delete / action)")
-    | project TimeGenerated, Source = "Azure", Actor,
+            "High-impact Azure control-plane change",
+        IsChange, "Azure control-plane change",
+        "Normal user activity")
+    | project TimeGenerated, Source = "Azure", Actor, ActivityClass,
               Category = ResourceProviderValue, Operation = OperationNameValue,
-              Privileged = iff(IsPriv, "Yes", "No"), PrivilegeReason,
               Result = ActivityStatusValue, ClientIP = CallerIpAddress,
               Target = _ResourceId, Details = tostring(Properties_d);
-// ---------------------------------------------------------------- Unified timeline
+// ---------------------------------------------------------------- Unified, classified timeline
 union Office, Entra, Azure
+| extend BaseSeverity = case(
+    ActivityClass in ("Privileged role/RBAC change","Privileged policy/security config change",
+                      "App/consent/service principal change","High-impact Azure control-plane change"), "High",
+    ActivityClass in ("User/group/identity admin change","Azure control-plane change",
+                      "High-risk sharing/data exposure","Requires manual review"), "Medium",
+    ActivityClass == "Possible admin activity (review)", "Low",
+    "Info")
+| extend Outcome = case(tolower(Result) has "fail", "Failure",
+                        tolower(Result) has "succ", "Success", "Other")
+| extend Severity = case(
+    Outcome == "Failure" and BaseSeverity == "High",   "Medium",
+    Outcome == "Failure" and BaseSeverity == "Medium", "Low",
+    BaseSeverity)
+| extend SeverityRank = case(Severity == "High", 3, Severity == "Medium", 2, Severity == "Low", 1, 0)
+| project TimeGenerated, Source, Actor, ActivityClass, Severity, Outcome,
+          Category, Operation, Result, ClientIP, Target, Details, SeverityRank
 | order by TimeGenerated desc

@@ -1,138 +1,158 @@
-# Privileged operations taxonomy
+# Activity classification taxonomy
 
-How we decide whether a single action is **administrative / privileged**, per
-source. This is the source of truth behind the `Privileged` column and the
-`PrivilegeReason` text in the queries. The canonical signal lists live in
+How each action is given an **`ActivityClass`** and a **`Severity`**, per source.
+This replaces the earlier binary "privileged yes/no" flag, which wrongly merged
+three different things: confirmed administrative actions, high-risk user / data
+exposure actions, and management-surface sign-in context. The canonical signal
+lists live in
 [`../queries/00-config-and-shared-taxonomy.kql`](../queries/00-config-and-shared-taxonomy.kql);
 this document explains the reasoning so another consultant can review and tune it.
 
-> Observable telemetry only. A privileged action is a prompt to review, never proof
+> Observable telemetry only. A classified action is a prompt to review, never proof
 > of misconduct. See [`assumptions-and-limitations.md`](assumptions-and-limitations.md).
+
+## Classification model
+
+Each row is assigned one `ActivityClass`:
+
+| ActivityClass | Base severity | Meaning |
+|---|---|---|
+| Privileged role/RBAC change | High | Directory / Exchange / Azure role or RBAC assignment changes. |
+| Privileged policy/security config change | High | Conditional Access, auth-method / security-defaults / domain / federation / cross-tenant policy, Exchange security config. |
+| App/consent/service principal change | High | App consent, delegated/app permission grants, SP creation, credential adds. |
+| High-impact Azure control-plane change | High | RBAC/PIM, Key Vault, identity, logging/security tampering, compute execution, automation, network controls, key enumeration. |
+| User/group/identity admin change | Medium | User lifecycle / credential admin performed on **another** user. |
+| Azure control-plane change | Medium | Any other `Administrative` write / delete / action. |
+| High-risk sharing/data exposure | Medium | Anonymous / company / secure links, sharing invites, eDiscovery / mailbox search. |
+| Requires manual review | Medium | Context-dependent (e.g. group membership - privileged only if the group is). |
+| Possible admin activity (review) | Low | Low-confidence: matched the admin-cmdlet shape or the secondary category net only. |
+| Management-surface sign-in | Info | Sign-in to admin tooling (query 04). Context, **not** an action. |
+| Normal user activity | Info | Everything else, incl. self-service. Kept in the timeline. |
+
+**Severity = base severity of the class, then a failed attempt is downgraded one
+level** (High to Medium, Medium to Low) so successful changes always rank above
+failed attempts while failures stay visible. `Outcome` (Success / Failure / Other)
+is derived from each source's result field.
+
+> Severity does not yet incorporate the **target object** (which user, which group,
+> which resource) or **scope**, because the three tables carry no privileged-roster
+> or group-purpose feed. That is the main planned refinement (watchlist). See
+> Tuning.
 
 ## Guiding principle: classify the action, not the person
 
-These three tables do not give us a reliable, current list of who holds which
-directory or Azure role. So we do **not** try to label a user as "an admin".
-Instead we ask, for each event: *is this action itself administrative or
-high-impact?* That keeps the model honest with the data we actually have, and it
-catches the case the client cares about - a user **performing** privileged
-activity - regardless of how their access was granted.
+These tables do not give a reliable, current list of who holds which role, so we do
+not label a user "an admin". We classify each action by what it is. A future
+privileged-roster / privileged-group watchlist would let us also weight *who* acted
+and sharpen the `Requires manual review` and group cases.
 
-A future refinement (see assumptions doc) is to layer in a privileged-roster
-watchlist so we can also weight *who* did it.
+## Source 1 - Entra ID (`AuditLogs`) - operation-name primary
 
-## Source 1 - Entra ID directory (`AuditLogs`)
+**Important schema note.** Microsoft's `AuditLogs` table reference documents the
+`Category` column as effectively a fixed value (`"Audit"`) in Log Analytics, and
+the activity-to-category mapping is inconsistent anyway (PIM activations log under
+`ApplicationManagement` / `GroupManagement`, not `RoleManagement`; credential /
+MFA / token operations log under `UserManagement`). **So classification is driven
+by `OperationName`** (the activity display name, which is stable and documented),
+matched case-insensitively as a substring against curated lists:
 
-Almost everything in `AuditLogs` is a directory change, but some entries are
-self-service (a user registering their own MFA, changing their own password). We
-flag **privileged** when **either**:
+- `EntraRoleOps` -> **Privileged role/RBAC change** (role assignment, eligible-role,
+  role-definition changes, PIM activation, elevate access).
+- `EntraAppOps` -> **App/consent/service principal change** (consent, delegated /
+  app-role permission grants, SP creation, credential / secret adds, owners).
+- `EntraPolicyOps` -> **Privileged policy/security config change** (Conditional
+  Access, authorization / auth-method / auth-strength policy, security defaults,
+  domain / federation, cross-tenant access, `Disable Strong Authentication`,
+  `Update StsRefreshTokenValidFrom`, `Read BitLocker key`).
+- `EntraIdentityOps` -> **User/group/identity admin change**, but only when **not
+  self-service**. Self-service is `InitiatedBy.user.id == TargetResources[0].id`
+  (a user acting on their own object, e.g. own password change); those drop to
+  **Normal user activity**.
+- `EntraReviewOps` (group lifecycle / membership) -> **Requires manual review** -
+  privileged only if the group is privileged, which we cannot tell from these logs.
+- A row that matches none of the lists but whose `Category` is in the secondary net
+  (`RoleManagement` etc.) -> **Possible admin activity (review)** (low confidence;
+  depends on `Category` being populated, which must be tenant-validated).
 
-- **Category** is in a high-impact set:
-  `RoleManagement`, `ApplicationManagement`, `Policy`, `AuthorizationPolicy`,
-  `DirectoryManagement`; **or**
-- **`OperationName`** matches a curated list (`PrivAuditOps`), e.g. role
-  assignment, app consent / delegated permission grant / credential add, service
-  principal creation, user create / delete / restore / disable, password reset by
-  admin, token-validity / strong-auth / BitLocker-key tampering, Conditional Access
-  policy changes, federation / domain changes, privileged group membership changes.
-
-**Self-service downgrade.** Several of these operations fire for both admin actions
-*and* benign self-service (a user updating their own profile or changing their own
-password). To avoid that noise, an action is **not** treated as privileged when the
-actor and the target are the same identity, i.e.
-`InitiatedBy.user.id == TargetResources[0].id`. This keeps admin-on-another-user
-events while dropping self-service. Group-membership operations are an exception:
-the target is a group, so the actor-vs-target test does not apply - they remain
-flagged and are best gated on a privileged-group watchlist (see Tuning).
-
-**Actor field:** `InitiatedBy.user.userPrincipalName` (id at `InitiatedBy.user.id`).
-**Highest-impact examples:** "Add member to role", "Add app role assignment to
-service principal", "Consent to application", "Add delegated permission grant",
-"Update conditional access policy", "Update StsRefreshTokenValidFrom Timestamp",
-"Disable Strong Authentication", "Read BitLocker key".
+**Actor:** `InitiatedBy.user.userPrincipalName` (id at `InitiatedBy.user.id`).
 
 ## Source 2 - Office 365 (`OfficeActivity`)
 
-Privileged when **any** of:
+- `OfficeRoleOps` -> **Privileged role/RBAC change** (role group / management role
+  membership, site collection admin add).
+- `OfficeSecurityCfgOps` -> **Privileged policy/security config change** (mailbox /
+  recipient / folder permissions, inbox / transport rules, connectors, remote
+  domain, journal, CAS mailbox, org config, DLP / retention policy).
+- `OfficeExposureOps` -> **High-risk sharing/data exposure** (anonymous / company /
+  secure links, sharing invitations, `SharingSet`, eDiscovery / compliance search,
+  `Search-Mailbox`).
+- Otherwise, an **admin record type** (`RecordType has "Admin"`) **or** the
+  case-insensitive admin-cmdlet shape `(?i)^(add|set|new|...)-` ->
+  **Possible admin activity (review)**. This is deliberately *low confidence*: the
+  cmdlet shape is an indicator of possible admin activity, not a confirmed
+  privileged action.
+- Everything else -> **Normal user activity** (kept in the timeline).
 
-- **`RecordType` contains `Admin`** (e.g. `ExchangeAdmin`) - these are admin
-  surfaces by definition; **or**
-- **`Operation`** is in a curated list (`PrivOfficeOps`), e.g. mailbox permission
-  grants, inbox-rule creation (incl. the OWA/Graph `UpdateInboxRules` op, not just
-  the cmdlets), transport / journal / remote-domain config, role-group and
-  management-role changes, organisation config, eDiscovery / compliance search,
-  anonymous / company sharing link creation, site collection admin additions; **or**
-- **`Operation` matches an admin-cmdlet shape** -
-  `(?i)^(add|set|new|remove|enable|disable|update|grant|reset)-` - which catches
-  Exchange / SharePoint administrative cmdlets generically. The `(?i)` flag makes it
-  case-insensitive so it does not depend on the source emitting PascalCase; `Get-`
-  (read / recon) is deliberately excluded.
-
-**Actor field:** `UserId`.
-**Watch items of note:** `New-InboxRule` / `Set-InboxRule` / `UpdateInboxRules`
-(auto-forwarding is a classic exfiltration / BEC signal), `Add-MailboxPermission`
-(delegate access), `New-ComplianceSearch` / `Search-Mailbox` (insider data access),
-sharing-link creation.
+**Actor:** `UserId`.
 
 > **Limitation - mail forwarding.** `Set-Mailbox -ForwardingSmtpAddress` /
 > `-DeliverToMailboxAndForward` is the classic exfiltration vector, but forwarding
-> is a *parameter*, not a distinct `Operation`. `set-mailbox` flags the cmdlet, but
-> to confirm forwarding you must inspect the `Details` (`Parameters`) column for
-> `ForwardingSmtpAddress`.
+> is a *parameter*, not a distinct `Operation`. `set-mailbox` is classed as a
+> security config change, but to confirm forwarding you must inspect the `Details`
+> (`Parameters`) column for `ForwardingSmtpAddress`.
 
 ## Source 3 - Azure control-plane (`AzureActivity`)
 
-We keep only `CategoryValue == "Administrative"` (user / service-principal
-control-plane changes; reads and platform noise are excluded). Within that:
+Restricted to `CategoryValue == "Administrative"`. The resolved action is
+`Authorization_d.action`, falling back to `OperationNameValue` when empty.
 
-- **Privileged** when the resolved action (`Authorization_d.action`, falling back
-  to `OperationNameValue`) contains `/write`, `/delete`, or `/action` - i.e. it
-  changes something rather than reading it; **or**
-- the friendly `OperationNameValue` is on a small allowlist (`PrivAzureFriendlyOps`)
-  of sensitive operations that do **not** contain a change verb in their friendly
-  form (e.g. "List Storage Account Keys", "Initiate JIT Network Access Policy").
-  This is the load-bearing fallback for when `Authorization_d.action` is empty.
-- **High-impact** subset (`HighPrivAzure`) when the action touches
-  `Microsoft.Authorization/roleAssignments` / `roleDefinitions` (RBAC),
-  `roleEligibilityScheduleRequests` / `roleAssignmentScheduleRequests` (PIM via
-  ARM), `elevateAccess`, `Microsoft.KeyVault`, `Microsoft.ManagedIdentity`, storage
-  key enumeration (`/listKeys/action`), or App Service publish-profile theft
-  (`Microsoft.Web/sites/publishxml`).
+- Action matches `HighPrivAzure`, **or** the friendly `OperationNameValue` is in
+  `PrivAzureFriendlyOps` -> **High-impact Azure control-plane change**. This list
+  covers RBAC / PIM-via-ARM, Key Vault, managed identity, diagnostic-settings
+  changes (log tampering), security / Sentinel, Log Analytics workspaces, VM
+  extensions and run-command (code execution), automation accounts, NSG / route
+  table / firewall / private endpoint, management-group scope, and storage key
+  enumeration / App Service publish profiles.
+- Otherwise, a change verb (`/write`, `/delete`, `/action`) **or** a friendly
+  sensitive op -> **Azure control-plane change**.
+- Otherwise -> **Normal user activity**.
 
-**Actor field:** `Caller` (a UPN for user-initiated actions; a GUID for service
-principals - filter `Caller has "@"` if you want users only).
+**Actor:** `Caller` (a UPN for user-initiated actions; a GUID for service
+principals - a user-UPN lookup naturally excludes those).
+
+**Control-plane only.** `AzureActivity` records configuration changes, not
+data-plane access. It may show a Key Vault or storage **configuration** change but
+will not show every secret read or blob read - see Known blind spots.
 
 ## Source 4 - Sign-ins (`SigninLogs`) - context only
 
-Sign-ins are **authentication events, not actions**, so they are never flagged as
-privileged activity and are not in the timeline. Query 04 instead marks
-`MgmtSurface = Yes` when the sign-in targets admin tooling (`MgmtSurfaceApps`:
-Azure Portal, Azure Resource Manager, Microsoft Graph / Graph PowerShell, Azure AD
-PowerShell, Azure CLI, Exchange Online PowerShell, Intune, etc.). This is used to
-explain *how* a privileged action was reached, not to assert that one happened.
+Sign-ins are authentication events, not actions, and never carry an action
+`ActivityClass`. Query 04 marks `MgmtSurface = Yes` when the sign-in targets admin
+tooling (`MgmtSurfaceApps`) and sets `ActivityClass = "Management-surface sign-in"`
+with `Severity = Info`. This is administrative-access context to correlate with
+real actions in 01 / 03, not evidence that an action occurred.
 
 ## Known blind spots
 
-These are inherent to the four supported tables, not bugs - state them when
-presenting results:
+Inherent to the four supported tables - state them when presenting results:
 
-- **Key Vault secret reads and Storage blob access are data-plane** and are **not**
-  in `AzureActivity`. They require diagnostic logs (e.g. `AzureDiagnostics` /
-  Key Vault audit, Storage diagnostic settings), which are out of scope here.
-- **Mail forwarding** is a `Set-Mailbox` parameter, not a distinct operation - see
-  the Office 365 limitation above.
-- **PIM activations** log under the `ApplicationManagement` / `GroupManagement`
-  categories, not `RoleManagement`; they are caught by the operation-name list
-  (`add member to role`, `add eligible member to role`), not by category.
+- **Key Vault secret reads and Storage blob access are data-plane** and are not in
+  `AzureActivity` (they need resource diagnostic logs).
+- **Mail forwarding** is a `Set-Mailbox` parameter, not a distinct operation.
+- **PIM activations** log under `ApplicationManagement` / `GroupManagement`, not
+  `RoleManagement` - caught by operation name, not category.
 - **Service-principal-initiated Azure actions** carry a GUID in `Caller`, so a
-  user-UPN lookup excludes them by design. Match the object id if you need SPN
-  activity.
+  user-UPN lookup excludes them by design.
+- **Group / target context** is unavailable, so group membership and generic
+  identity changes are `Requires manual review` rather than confirmed-privileged.
 
 ## Tuning
 
-- Validate the lists against the tenant's **real** operations using query 02
-  (counts per source + category) before relying on the flag operationally.
-- Lists are intentionally broad first cuts. Tightening `PrivOfficeOps` /
-  `PrivAuditOps` reduces false highlights; broadening them reduces misses.
-- Keep query 01 (`IsPriv` expressions) and query 03 (`where` filters) in step with
-  any change here and in `00-config`.
+- Validate the lists - especially the Entra `Category` secondary net - against the
+  tenant's **real** operations using query 02 before relying on them operationally.
+- The single biggest precision win is a **privileged-roster / privileged-group
+  watchlist**: it would let `Requires manual review` and `User/group/identity admin
+  change` be promoted to confirmed-privileged based on the target, and let severity
+  reflect *who* / *what* was targeted.
+- Keep the per-source `case()` expressions in queries 01 / 02 / 03 in step with any
+  change here and in `00-config`.

@@ -31,6 +31,8 @@ location, and client - or from somewhere unexpected.
 | Column | Meaning |
 |---|---|
 | `TimeGenerated` | When the sign-in occurred (UTC). |
+| `ActivityClass` | `Management-surface sign-in` (admin tooling) or `Sign-in`. Context, not an action. |
+| `Severity` | Always `Info` - a sign-in is never an action. |
 | `App` / `Resource` | The application and resource the sign-in targeted. |
 | `MgmtSurface` | `Yes` if `App`/`Resource` is admin tooling (`MgmtSurfaceApps`). |
 | `Status` | `Success`, or `Failure (<ResultType>)`. |

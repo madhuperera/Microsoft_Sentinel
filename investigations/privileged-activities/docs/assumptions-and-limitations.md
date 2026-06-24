@@ -4,7 +4,7 @@
 
 1. **Observable telemetry only.** These rows reflect what the platform logged, not
    a complete account of what a person did.
-2. **Review only.** A highlighted (privileged) action is a *prompt to ask a
+2. **Review only.** A classified (non-normal) action is a *prompt to ask a
    question*, never evidence of wrongdoing. Many privileged actions are legitimate
    and expected of the role.
 3. **Privileged work is normal for privileged staff.** This tool is for confirming
@@ -26,9 +26,14 @@
 - "Azure Audit logs" means **both** `AuditLogs` (Entra) and `AzureActivity`
   (Azure control-plane). The queries reference both; whichever is not ingested
   simply returns no rows for that source (the `union` still succeeds).
-- The privileged signal lists in `00-config` are a **reasonable first cut** for a
-  typical tenant, not a tenant-validated list. They were docs-verified against
+- The classification signal lists in `00-config` are a **reasonable first cut** for
+  a typical tenant, not a tenant-validated list. They were docs-verified against
   Microsoft's published operation names but not yet against live tenant data.
+- **Entra classification is operation-name primary.** The `AuditLogs.Category`
+  column is documented by Microsoft as effectively fixed (`"Audit"`) in Log
+  Analytics, and the activity-to-category mapping is inconsistent, so `Category` is
+  used only as a low-confidence secondary net (the "Possible admin activity
+  (review)" fallback) and must be validated per tenant.
 - The Entra **self-service downgrade** assumes `InitiatedBy.user.id` and
   `TargetResources[0].id` are populated and comparable. When either is empty the
   action is treated as not-self-service (i.e. it stays flagged) - a deliberately
@@ -58,8 +63,13 @@
   activations log under `ApplicationManagement` / `GroupManagement`, not
   `RoleManagement`. See `privileged-operations-taxonomy.md` for the full list.
 - **Heuristic classification.** The admin-cmdlet regex and substring matches can
-  both over-flag (a benign `Set-` cmdlet) and under-flag (a privileged operation
-  not yet in the list). Treat the flag as a starting point.
+  both over-flag and under-flag; low-confidence matches are deliberately set to the
+  `Possible admin activity (review)` class rather than a confirmed-privileged class.
+- **Severity ignores target / scope.** Severity is derived from the action class
+  and the success / failure outcome only. It does not yet reflect the **target**
+  (which user, group, or resource) or **administrative scope**, because no
+  privileged-roster / group-purpose feed exists in these tables. Group membership
+  and generic identity changes are therefore `Requires manual review`.
 - **Shared / delegated access.** Delegated mailbox access, "act on behalf of", and
   shared accounts can attribute activity in ways that do not map cleanly to one
   person.
@@ -71,12 +81,17 @@ Run and review before relying on this for an investigation:
 - [ ] Confirm `SigninLogs`, `OfficeActivity`, `AuditLogs`, and `AzureActivity` are
       ingested, with retention covering the windows you will query.
 - [ ] Run query 02 against a few known privileged users; confirm the
-      `Source` / `Category` split and `PrivilegedEvents` look sane.
+      `Source` / `ActivityClass` / `Severity` split looks sane.
 - [ ] Validate / tune the signal lists in `00-config` against the tenant's real
       operations (and propagate changes to queries 01 / 02 / 03).
+- [ ] **Validate the Entra `Category` secondary net** - confirm whether
+      `AuditLogs.Category` carries activity categories in this tenant; if not, the
+      "Possible admin activity (review)" fallback will be empty (operation-name
+      classes are unaffected).
 - [ ] Spot-check query 03 against a user with known recent admin work - are their
-      actions captured and correctly reasoned?
-- [ ] Spot-check that a non-privileged user returns an empty query 03.
+      actions captured and correctly classed?
+- [ ] Spot-check that a non-privileged user returns only low-severity / empty
+      results in query 03.
 - [ ] Confirm with the client that the framing, access controls, and staff
       transparency around this monitoring are agreed.
 - [ ] Agree that outputs will be labelled "review only / not proof of misconduct"

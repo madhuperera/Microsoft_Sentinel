@@ -43,22 +43,32 @@ it into the activity timeline would bury the actual actions. So:
   explain *how* a privileged action was reached (device, location, client, MFA,
   Conditional Access, management surface).
 
-## 4. Privileged classification
+## 4. Activity classification (`ActivityClass` + `Severity`)
 
-Each action row is classified `Privileged = Yes/No` by testing the action itself
-against per-source signals (we do not have a role-membership feed, so we classify
-the action, not the person). The full rules and rationale are in
+Each action row is given an **`ActivityClass`** and a **`Severity`** rather than a
+single privileged yes/no flag. This keeps three things separate that must not be
+confused: confirmed administrative actions, high-risk user / data-exposure actions,
+and management-surface sign-in context. We classify the **action, not the person**
+(no role-membership feed exists in these tables). The full class list, per-source
+rules, and rationale are in
 [`privileged-operations-taxonomy.md`](privileged-operations-taxonomy.md). In short:
 
-- **Entra ID**: privileged category (RoleManagement / ApplicationManagement /
-  Policy / ...) **or** a curated high-impact operation.
-- **Office 365**: admin `RecordType`, **or** a curated operation, **or** an
-  admin-cmdlet shape (`Add-`/`Set-`/`New-`/...).
-- **Azure**: an `Administrative` action that writes / deletes / runs an action;
-  RBAC / Key Vault / identity flagged as high-impact.
+- **Entra ID** classification is **operation-name primary**. Microsoft documents
+  the `AuditLogs` `Category` column as effectively fixed in Log Analytics, and the
+  activity-to-category mapping is inconsistent (PIM under ApplicationManagement /
+  GroupManagement; credential / MFA / token ops under UserManagement). So
+  `OperationName` drives the class; `Category` is a low-confidence secondary net
+  that must be tenant-validated. Self-service (actor == target) drops to normal.
+- **Office 365**: curated lists map to role / security-config / data-exposure
+  classes; an admin `RecordType` or admin-cmdlet shape is only **"Possible admin
+  activity (review)"** (an indicator, not a confirmed privileged action).
+- **Azure**: `Administrative` write / delete / action; an expanded high-impact list
+  (RBAC/PIM, Key Vault, logging/security tampering, compute execution, automation,
+  networking, key enumeration, management-group scope) gets the high-impact class.
 
-Every flagged row carries a `PrivilegeReason` so the basis for the highlight is
-visible, not hidden in the query.
+**Severity** is the class's base level, then **failed attempts are downgraded one
+level** (High to Medium, Medium to Low) so successful changes rank above failed
+ones while failures remain visible (`Outcome` = Success / Failure / Other).
 
 ## 5. Identity resolution
 
@@ -81,16 +91,20 @@ are UTC.
 
 ## 7. Run order
 
-1. **02 - summary** - shape of the activity, where the privileged events are.
-2. **01 - timeline** - the full chronological account, privileged highlighted.
-3. **03 - privileged only** - the highlights on their own.
-4. **04 - sign-in context** - correlate the privileged actions with how the user
+1. **02 - summary** - shape of the activity: counts by `Source` / `ActivityClass` /
+   `Severity`.
+2. **01 - timeline** - the full chronological account, every row classified
+   (normal activity included).
+3. **03 - flagged only** - everything except `Normal user activity`, highest
+   severity first.
+4. **04 - sign-in context** - correlate the flagged actions with how the user
    authenticated.
 
 ## 8. Output shape (for later workbook use)
 
 The columns are deliberately uniform across 01 / 03 (`TimeGenerated, Source,
-Actor, Category, Operation, Privileged, PrivilegeReason, Result, ClientIP, Target,
-Details`) so a future Sentinel workbook can bind a single grid with conditional
-formatting on `Privileged`, parameter-driven `TargetUser` / time range, and a
-drill-down into `Details`. Query 02 is shaped for a summary tile / bar chart.
+Actor, ActivityClass, Severity, Outcome, Category, Operation, Result, ClientIP,
+Target, Details, SeverityRank`) so a future Sentinel workbook can bind a single
+grid with conditional formatting on `Severity` / `ActivityClass`, sort on
+`SeverityRank`, drive `TargetUser` / time range from parameters, and drill into
+`Details`. Query 02 is shaped for a summary tile / bar chart by class and severity.

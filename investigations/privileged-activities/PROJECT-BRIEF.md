@@ -47,8 +47,8 @@ The core question:
 | "Azure Audit logs" means | **Both** `AuditLogs` and `AzureActivity` (confirmed). |
 | Advanced Hunting | **Not used.** Sentinel / Log Analytics KQL only. |
 | Input | A single `TargetUser` (UPN) + a `StartTime` / `EndTime` window. |
-| Primary output | All of a user's activity, with `Privileged = Yes/No` + reason. |
-| Classification basis | The **action**, not the person (no role-membership feed in these tables). |
+| Primary output | All of a user's activity, each row given an `ActivityClass` + `Severity`. |
+| Classification basis | The **action**, not the person (no role-membership feed in these tables). Entra is operation-name primary; `Category` is a low-confidence secondary net. |
 | Sign-ins | Treated as **authentication context**, not actions; kept in a separate query. |
 | Configurability | User, window, and the privileged signal lists are all editable at the top of each file. |
 | Branding | None / generic. |
@@ -85,6 +85,28 @@ investigations/privileged-activities/
 
 ## 6. Guidance log (append-only, newest first)
 
+- **2026-06-24** (update) - Second external code review (run against the original).
+  Acted on it with a **full restructure** from the binary `Privileged = Yes/No`
+  flag to an explicit **`ActivityClass` + `Severity`** model (client chose: go fully
+  to classes, no binary flag). Key changes: (1) separated confirmed privileged
+  admin from high-risk sharing / data exposure and from management-surface sign-in
+  context (distinct classes); (2) made Entra **operation-name primary** after
+  confirming via docs that `AuditLogs.Category` is documented as effectively fixed
+  (`"Audit"`) in Log Analytics and that activity-to-category mapping is inconsistent
+  (PIM under App/Group management; credential/MFA/token ops under UserManagement) -
+  `Category` is now a low-confidence secondary net only; (3) demoted the Office
+  admin-cmdlet shape and the category net to a `Possible admin activity (review)`
+  class; (4) expanded Azure high-impact coverage (diagnostic settings, policy
+  assignments, security/Sentinel, Log Analytics, VM extensions / run-command,
+  automation, NSG/route/firewall/private-endpoint, mgmt-group scope, key
+  enumeration); (5) expanded Office coverage (connectors, DLP/retention, eDiscovery
+  / compliance search, management roles); (6) added cross-tenant / auth-method /
+  security-defaults Entra ops; (7) severity now factors success vs failure (failed
+  attempts downgraded one level, kept visible); (8) added explicit control-plane-
+  only and "not full coverage" limitation statements to README and every query
+  header. Output schema for 01/03 is now `TimeGenerated, Source, Actor,
+  ActivityClass, Severity, Outcome, Category, Operation, Result, ClientIP, Target,
+  Details, SeverityRank`.
 - **2026-06-24** (update) - Ran a docs-verified subagent review of the privileged
   classification logic and applied the findings. Fixed strings that never matched
   (`add oauth2permissiongrant` -> added `add delegated permission grant`;

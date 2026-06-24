@@ -1,15 +1,24 @@
 # Privileged Activities - user activity review
 
-User-scoped review of Microsoft 365, Entra ID, and Azure activity, with
-**administrative / privileged actions highlighted**. Give a username and a date
-range, run a query, and see what that account did.
+User-scoped review of Microsoft 365, Entra ID, and Azure activity. Each action is
+given an **`ActivityClass`** and a **`Severity`** so administrative, high-risk, and
+normal activity are distinguished (not collapsed into one flag). Give a username and
+a date range, run a query, and see what that account did.
 
 > ⚠️ **Read this first.** These results are *observable telemetry only*. A
-> highlighted (privileged) action is a **signal to review**, never evidence of
-> wrongdoing - privileged work is normal and expected for privileged staff. This is
-> event-level, privacy-sensitive monitoring of named individuals; confirm it is
-> lawful, proportionate, approved, and transparent to staff before operational use.
+> classified action is a **signal to review**, never evidence of wrongdoing -
+> privileged work is normal and expected for privileged staff. This is event-level,
+> privacy-sensitive monitoring of named individuals; confirm it is lawful,
+> proportionate, approved, and transparent to staff before operational use.
 > See [`docs/assumptions-and-limitations.md`](docs/assumptions-and-limitations.md).
+
+> **Coverage limitation.** Detections are based **only** on the logs the client
+> currently has: Entra **sign-in logs** (`SigninLogs`), Office 365 **activity**
+> (`OfficeActivity`), and Azure **audit logs** (`AuditLogs` + `AzureActivity`).
+> `AzureActivity` is **control-plane only** - it shows configuration changes, not
+> data-plane access (Key Vault secret reads, Storage blob reads, mailbox / file
+> content). This is **not** full coverage of Microsoft 365 / Azure / endpoint
+> activity, and does not claim to capture all privileged activity.
 
 ## What this is
 
@@ -46,13 +55,13 @@ let EndTime    = now();                      // or datetime(2026-06-01)
 
 | Step | File | Purpose |
 |---|---|---|
-| 1 | `queries/02-user-activity-summary.kql` | Overview: counts per source / category and how many were privileged. Run this first. |
-| 2 | `queries/01-user-activity-timeline.kql` | The full chronological account of everything the user did, `Privileged = Yes/No` highlighted. |
-| 3 | `queries/03-user-privileged-activity.kql` | Only the administrative / high-impact actions. |
+| 1 | `queries/02-user-activity-summary.kql` | Overview: counts per source / `ActivityClass` / `Severity`. Run this first. |
+| 2 | `queries/01-user-activity-timeline.kql` | The full chronological account of everything the user did, each row classified (normal activity kept). |
+| 3 | `queries/03-user-privileged-activity.kql` | Everything except `Normal user activity`, highest severity first. |
 | 4 | `queries/04-user-signin-context.kql` | Sign-in / location / MFA context to explain how those actions were reached. |
 
 `queries/00-config-and-shared-taxonomy.kql` is a **reference** (parameters + the
-privileged signal lists), not a report.
+classification signal lists + the class-to-severity map), not a report.
 
 ## Documentation
 

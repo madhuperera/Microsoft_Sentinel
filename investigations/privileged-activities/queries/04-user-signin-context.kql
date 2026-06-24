@@ -38,7 +38,11 @@ SigninLogs
 | where tolower(UserPrincipalName) == tolower(TargetUser)
 | extend MgmtSurface = iff((AppDisplayName has_any (MgmtSurfaceApps))
                             or (ResourceDisplayName has_any (MgmtSurfaceApps)), "Yes", "No")
-| project TimeGenerated, UserPrincipalName,
+// ActivityClass aligns with the timeline model: a management-surface sign-in is
+// administrative-access CONTEXT, not a privileged action. Severity is always Info.
+| extend ActivityClass = iff(MgmtSurface == "Yes", "Management-surface sign-in", "Sign-in"),
+         Severity = "Info"
+| project TimeGenerated, UserPrincipalName, ActivityClass, Severity,
           App = AppDisplayName, Resource = ResourceDisplayName, MgmtSurface,
           Status = iff(ResultType == "0", "Success", strcat("Failure (", ResultType, ")")),
           IPAddress, Country = Location, City = tostring(LocationDetails.city),
