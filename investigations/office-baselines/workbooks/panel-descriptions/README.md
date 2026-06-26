@@ -1,9 +1,18 @@
 # Panel descriptions (source of truth)
 
-Each `NN.md` file is the **exact text** shown in the matching description panel of the
-combined workbook (`DEV_OfficeBaselines-AllQueries_vN.json`). These files are the source
-of truth: edit them here, then ask for the workbook to be rebuilt and the new version
-will contain this text verbatim.
+Each `NN.md` file is the text shown for the matching panel of the combined workbook
+(`DEV_OfficeBaselines-AllQueries_vN.json`). These files are the source of truth: edit
+them here, then ask for the workbook to be rebuilt and the new version will contain this
+text verbatim.
+
+> **From v8, each file is split into two workbook items:**
+> - **line 1** (the `### NN. ...` heading) becomes the panel's **always-visible title**
+>   (`title-NN`) - it is never hidden by the Show/Hide toggle;
+> - **the rest** becomes the **collapsible description** (`desc-NN`), controlled by the
+>   panel's Description pill.
+>
+> So keep the heading on line 1, then a blank line, then the body. Do not add a second
+> top-level heading.
 
 ## Mapping
 

@@ -17,7 +17,8 @@ the current one.
 
 | File | Built from | What it shows |
 |---|---|---|
-| `DEV_OfficeBaselines-AllQueries_v7.json` | **all** queries `01`-`11` | **Current.** Adds status icons to the grids (trend up/down/neutral on the review columns), driven by the `Status` text so the +/- normal band is respected. |
+| `DEV_OfficeBaselines-AllQueries_v8.json` | **all** queries `01`-`11` | **Current.** Customer feedback: (1) panel titles are now always visible (split out of the description so the Show/Hide toggle hides only the body); (2) panel `07` shows every workload per active person, including zeros. |
+| `DEV_OfficeBaselines-AllQueries_v7.json` | **all** queries `01`-`11` | Superseded by v8. Adds status icons to the grids (trend up/down/neutral on the review columns), driven by the `Status` text so the +/- normal band is respected. |
 | `DEV_OfficeBaselines-AllQueries_v6.json` | **all** queries `01`-`11` | Superseded by v7. Full business-friendly panel descriptions synced from `panel-descriptions/NN.md`. Kept for rollback. |
 | `DEV_OfficeBaselines-AllQueries_v5.json` | **all** queries `01`-`11` | Superseded. Relative 7-day date default and the "About the controls" help block. Kept for rollback. |
 | `DEV_OfficeBaselines-AllQueries_v4.json` | **all** queries `01`-`11` | Superseded. Working Show/Hide toggles on every panel (`type: 10` pill parameter). Kept for rollback. |
@@ -47,6 +48,19 @@ Every query and graph in the project, in the same three groups as `queries/`:
 A plain-English **"About the controls"** help block is shown in the workbook itself,
 just under the parameters, so business users do not need this table.
 | `W_Desc01` ... `W_Desc11` | panel visibility | `Show` | **Per-panel description toggle.** Each graph/table has its own Show/Hide pill above it, implemented as a small parameters step with a `type: 10` parameter (not a links/tabs control, which the portal blanks on save). Defaults to Show. |
+
+### Panel titles vs descriptions (v8)
+
+Each panel has two text items:
+
+- an **always-visible title** (`title-NN`) - the `### NN. ...` heading. It is never
+  hidden, so the report stays navigable even when descriptions are collapsed.
+- a **collapsible description** (`desc-NN`) - the body, toggled by the panel's
+  **Description** Show/Hide pill (`W_DescNN`).
+
+Both come from the **same** `panel-descriptions/NN.md` file: the build splits the
+**first line** (the heading) into the title item and uses the **rest** as the
+description body. So you still edit one file per panel; keep the heading on line 1.
 
 ### Panel descriptions live in `panel-descriptions/` (source of truth)
 
@@ -80,6 +94,13 @@ defect that returned no data).
 > tokens. As in the other DEV workbook, the `sharepoint\system` exclusion entry is
 > dropped (backslash escaping); `app@sharepoint` / `system@sharepoint`, guests, and the
 > service-account watchlist are still excluded.
+>
+> **Divergence (v8):** `query-07` in the workbook now **zero-fills workloads** - every
+> active person gets a row for every app (real figure or `0`), while the org stats
+> (median/percentiles/MAD) still come only from users at/above `{W_MinUserActivity}`.
+> The source `queries/org-comparison/07-user-vs-org-robust-zscore.kql` has **not** been
+> changed; it still returns only workloads where a user was active. Port it across if you
+> want them identical.
 
 ### Regenerating
 
@@ -129,6 +150,12 @@ and B2B guests are excluded exactly as in the source queries.
 - v7 supersedes v6: grid status icons via `dev-scratch/build-workbook-v7.ps1`. Icons are
   driven by the status text, not the percentage change, so a small dip inside the normal
   band stays neutral and rows with no baseline are not mislabelled.
+- v8 supersedes v7 (customer feedback), via `dev-scratch/build-workbook-v8.ps1`:
+  - **Titles always visible.** Each panel's `### NN. ...` heading is split into its own
+    `title-NN` item above the Description toggle; the toggle now hides only the body.
+  - **Workload completeness in `07`.** Every active person shows a row for every app
+    (zeros included, usually `Below P25`); org typical levels still exclude sub-threshold
+    users so the median is not dragged down. See the divergence note above.
 
 ### Grid status icons (v7)
 
