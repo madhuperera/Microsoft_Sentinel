@@ -17,7 +17,8 @@ the current one.
 
 | File | Built from | What it shows |
 |---|---|---|
-| `DEV_OfficeBaselines-AllQueries_v8.json` | **all** queries `01`-`11` | **Current.** Customer feedback: (1) panel titles are now always visible (split out of the description so the Show/Hide toggle hides only the body); (2) panel `07` shows every workload per active person, including zeros. |
+| `DEV_OfficeBaselines-AllQueries_v9.json` | **all** queries `01`-`11` | **Current.** Classifies four previously-`UNMAPPED` operations in panel `10` (`FileVersionsAllDeleted`, `SharingInvitationCreated`, `SharingPolicyChanged`, `SPOTenantCmdlets`). All `EngagementSignal = No`, so the engagement metrics are unchanged. |
+| `DEV_OfficeBaselines-AllQueries_v8.json` | **all** queries `01`-`11` | Superseded by v9. Customer feedback: (1) panel titles are now always visible (split out of the description so the Show/Hide toggle hides only the body); (2) panel `07` shows every workload per active person, including zeros. |
 | `DEV_OfficeBaselines-AllQueries_v7.json` | **all** queries `01`-`11` | Superseded by v8. Adds status icons to the grids (trend up/down/neutral on the review columns), driven by the `Status` text so the +/- normal band is respected. |
 | `DEV_OfficeBaselines-AllQueries_v6.json` | **all** queries `01`-`11` | Superseded by v7. Full business-friendly panel descriptions synced from `panel-descriptions/NN.md`. Kept for rollback. |
 | `DEV_OfficeBaselines-AllQueries_v5.json` | **all** queries `01`-`11` | Superseded. Relative 7-day date default and the "About the controls" help block. Kept for rollback. |
@@ -156,6 +157,14 @@ and B2B guests are excluded exactly as in the source queries.
   - **Workload completeness in `07`.** Every active person shows a row for every app
     (zeros included, usually `Below P25`); org typical levels still exclude sub-threshold
     users so the median is not dragged down. See the divergence note above.
+- v9 supersedes v8 (customer feedback), via `dev-scratch/build-workbook-v9.ps1`:
+  - **Four operations classified.** `FileVersionsAllDeleted` (Content-Lifecycle),
+    `SharingInvitationCreated` (Sharing-Collaboration, candidate), `SharingPolicyChanged`
+    and `SPOTenantCmdlets` (Administrative) were appearing as `UNMAPPED` in panel `10`;
+    they are now labelled. All are `EngagementSignal = No`, so `MeaningfulOps` and every
+    metric panel are unchanged. The same rows were added to `queries/drilldown/10-*.kql`,
+    `queries/00-*.kql`, `docs/activity-taxonomy.md` and the watchlist CSV so all taxonomy
+    copies stay in sync.
 
 ### Grid status icons (v7)
 

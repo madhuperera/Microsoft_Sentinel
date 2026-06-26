@@ -27,3 +27,7 @@ MicrosoftTeams,MessagesListed,Read-Access,No,Reading message lists - background
 AzureActiveDirectory,UserLoggedIn,Security-Signal,No,Sign-ins measured from SigninLogs - avoid double counting
 Exchange,New-InboxRule,Administrative,No,Admin/config or security signal not engagement
 SharePoint,SearchQueryPerformed,Search,No,Noisy weak engagement signal
+SharePoint,FileVersionsAllDeleted,Content-Lifecycle,No,All versions of a file deleted - destructive lifecycle action not authored work
+OneDrive,SharingInvitationCreated,Sharing-Collaboration,No,User created a sharing invitation - deliberate sharing (promotion candidate)
+OneDrive,SharingPolicyChanged,Administrative,No,Sharing policy/config change - admin not engagement
+OneDrive,SPOTenantCmdlets,Administrative,No,SharePoint Online tenant admin cmdlets - admin not engagement

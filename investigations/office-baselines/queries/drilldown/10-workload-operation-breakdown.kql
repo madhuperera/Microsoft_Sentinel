@@ -100,6 +100,7 @@ let Taxonomy = datatable(Operation:string, Category:string, EngagementSignal:str
     "ListItemDeleted","Content-Lifecycle","No",
     "ListItemRecycled","Content-Lifecycle","No",
     "ListItemRestored","Content-Lifecycle","No",
+    "FileVersionsAllDeleted","Content-Lifecycle","No",
     // ---- Content-Management (No) — folder/list structure & file housekeeping ---
     "FolderCreated","Content-Management","No",
     "FolderModified","Content-Management","No",
@@ -127,6 +128,7 @@ let Taxonomy = datatable(Operation:string, Category:string, EngagementSignal:str
     "SecureLinkUpdated","Sharing-Collaboration","No",
     "AddedToSharingLink","Sharing-Collaboration","No",
     "AddedToSecureLink","Sharing-Collaboration","No",
+    "SharingInvitationCreated","Sharing-Collaboration","No",
     // ---- Content-Collaboration (No, candidate) — commenting on content ---------
     "CommentCreated","Content-Collaboration","No",
     "CommentEdit","Content-Collaboration","No",
@@ -176,7 +178,9 @@ let Taxonomy = datatable(Operation:string, Category:string, EngagementSignal:str
     "SiteCollectionQuotaModified","Administrative","No",
     "SiteDesignInvoked","Administrative","No",
     "ListDesignInvoked","Administrative","No",
-    "CommentsDisabled","Administrative","No"
+    "CommentsDisabled","Administrative","No",
+    "SharingPolicyChanged","Administrative","No",
+    "SPOTenantCmdlets","Administrative","No"
 ];
 OfficeActivity
 | where TimeGenerated >= ago(LookbackPeriod)

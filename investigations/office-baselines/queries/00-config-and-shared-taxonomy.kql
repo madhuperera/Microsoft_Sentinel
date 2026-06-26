@@ -85,7 +85,11 @@ let Taxonomy = datatable(Workload:string, Operation:string, Category:string, Eng
     "MicrosoftTeams","MessagesListed","Read-Access","No",
     "AzureActiveDirectory","UserLoggedIn","Security-Signal","No",
     "Exchange","New-InboxRule","Administrative","No",
-    "SharePoint","SearchQueryPerformed","Search","No"
+    "SharePoint","SearchQueryPerformed","Search","No",
+    "SharePoint","FileVersionsAllDeleted","Content-Lifecycle","No",
+    "OneDrive","SharingInvitationCreated","Sharing-Collaboration","No",
+    "OneDrive","SharingPolicyChanged","Administrative","No",
+    "OneDrive","SPOTenantCmdlets","Administrative","No"
 ];
 Taxonomy
 | order by EngagementSignal desc, Workload asc, Operation asc

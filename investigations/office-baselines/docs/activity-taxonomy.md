@@ -101,14 +101,14 @@ additions classified there:
 | `Mailbox-Activity` | `Update` |
 | `Background-Sync` | `FileModifiedExtended`, `FileUploadedPartial`, `TeamsMeetingRecordingUploaded` |
 | `Read-Access` | `FileAccessedExtended`, `AttachmentAccess`, `ListViewed`, `PagePrefetched`, `SharingLinkUsed`, `CompanyLinkUsed`, `SecureLinkUsed`, `MessageReadReceiptReceived` |
-| `Content-Lifecycle` | `MoveToDeletedItems`, `SoftDelete`, `HardDelete`, `FileRecycled`, `ListItemDeleted`, `ListItemRestored` |
+| `Content-Lifecycle` | `MoveToDeletedItems`, `SoftDelete`, `HardDelete`, `FileRecycled`, `ListItemDeleted`, `ListItemRestored`, `FileVersionsAllDeleted` |
 | `Content-Management` | `FolderCreated`/`Renamed`/`Moved`, `FileCopied`, `FileCheckedOut`, `List*` create/update/column changes |
-| `Sharing-Collaboration` *(candidate)* | `SharingSet`, `SharingLinkCreated`, `CompanyLinkCreated`, `SecureLinkCreated`, `AddedToSharingLink` |
+| `Sharing-Collaboration` *(candidate)* | `SharingSet`, `SharingLinkCreated`, `CompanyLinkCreated`, `SecureLinkCreated`, `AddedToSharingLink`, `SharingInvitationCreated` |
 | `Content-Collaboration` *(candidate)* | `CommentCreated`, `CommentEdit` |
 | `Teams-Communication` *(candidate)* | `MessageCreatedHasLink`, `MessageEditedHasLink`, `MessageUpdated`, `ReactedToMessage` |
 | `Meetings` *(candidate)* | `CallParticipantDetail`, `MeetingDetail` |
 | `Security-Signal` | `TeamsSessionStarted`, `SignInEvent`, `BaselineSecurityModeThirdPartyAppHPA` |
-| `Administrative` | group/permission/membership changes, `Tab*`/`App*`, `SiteCollection*`, `Sharing(Inheritance)Broken`/`Revoked` |
+| `Administrative` | group/permission/membership changes, `Tab*`/`App*`, `SiteCollection*`, `Sharing(Inheritance)Broken`/`Revoked`, `SharingPolicyChanged`, `SPOTenantCmdlets` |
 
 ## Tuning workflow
 
