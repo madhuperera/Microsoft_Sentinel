@@ -1,0 +1,986 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Microsoft 365 Activity Baselines (v10)\n\n> ⚠️ **Please read first.** Everything here is **observable telemetry only**. It is **not** a measure of productivity, work quality, effort, or hours worked. A higher number does **not** mean more or better work. Use these views as **prompts to ask a question**, never as proof of underperformance or misconduct.\n\n**How to use this workbook**\n\n1. Pick a **Date range** at the top (choose a custom start and end).\n2. To focus on one person, type their email in **User UPN** (optional for most panels).\n3. Each panel has a short plain-English note with a **Show / Hide description** button.\n\nThe workbook has three sections: **(1)** each person vs their own normal, **(2)** comparison with the wider organisation, and **(3)** drill-down detail. Service accounts, system accounts, and external guests are excluded throughout."
+      },
+      "name": "text - title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "name": "W_TimeRange",
+            "id": "8eba5a53-177b-4800-972d-a3a7c5b01b2e",
+            "label": "Date range (custom)",
+            "type": 4,
+            "typeSettings": {
+              "allowCustom": true,
+              "selectableValues": []
+            },
+            "version": "KqlParameterItem/1.0",
+            "isRequired": true,
+            "value": {
+              "durationMs": 2678400000,
+              "endTime": "2026-06-19T01:15:00Z"
+            }
+          },
+          {
+            "version": "KqlParameterItem/1.0",
+            "label": "User UPN (drill-down, optional)",
+            "name": "W_TargetUser",
+            "type": 1,
+            "id": "62ba97f8-fa03-4672-a587-e4c29eca3aeb",
+            "value": ""
+          },
+          {
+            "jsonData": "[{\"value\":\"10\",\"label\":\"10%\"},{\"value\":\"20\",\"label\":\"20%\",\"selected\":true},{\"value\":\"30\",\"label\":\"30%\"}]",
+            "id": "dea813e1-30eb-4e7d-a6da-3cb0002cd2ca",
+            "label": "Normal band (+/- %)",
+            "type": 2,
+            "name": "W_NormalBandPct",
+            "version": "KqlParameterItem/1.0",
+            "isRequired": true
+          },
+          {
+            "jsonData": "[{\"value\":\"1\",\"label\":\"1\"},{\"value\":\"5\",\"label\":\"5\",\"selected\":true},{\"value\":\"10\",\"label\":\"10\"},{\"value\":\"20\",\"label\":\"20\"}]",
+            "id": "88cf2b3d-02ce-4a73-9a5e-6ff1e2517bab",
+            "label": "Min activity (events) per user",
+            "type": 2,
+            "name": "W_MinUserActivity",
+            "version": "KqlParameterItem/1.0",
+            "isRequired": true
+          },
+          {
+            "jsonData": "[{\"value\":\"2.5\",\"label\":\"2.5\"},{\"value\":\"3\",\"label\":\"3.0\"},{\"value\":\"3.5\",\"label\":\"3.5\",\"selected\":true},{\"value\":\"4\",\"label\":\"4.0\"}]",
+            "id": "1a4364d9-b16a-4db4-b952-e232e2e4ac11",
+            "label": "Outlier threshold (|modified z|)",
+            "type": 2,
+            "name": "W_OutlierZ",
+            "version": "KqlParameterItem/1.0",
+            "isRequired": true
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - global controls"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### ℹ️ About the controls\n\n- **Date range** : the period to report on. Defaults to the **last 7 days** (today, going back 7 days). Pick a custom start and end at any time.\n- **User UPN** : optional. Type a person's email to focus the people-specific panels on them; leave it empty for everyone.\n- **Normal band (+/- %)** : how big a change counts as \"normal\" in Section 1. At 20%, a person's activity can move up or down by up to 20% versus their own previous period before they are flagged. A wider band means fewer flags.\n- **Min activity (events) per user** : when working out the company's typical levels (Section 2), accounts with fewer than this many events are ignored, so a handful of barely-used accounts do not distort the averages.\n- **Outlier threshold** : in Section 2, how far from the company's typical level a person must be before they are marked unusual. It is measured on a robust scale, so a higher number flags only the most extreme cases.",
+        "style": "info"
+      },
+      "name": "text - controls help"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# Section 1. Baseline: each person vs their own normal\n\nThe **main view**. Everyone is compared against *themselves* (their previous period of the same length), not against each other. Best for spotting a real change in one person's pattern over time.",
+        "style": "info"
+      },
+      "name": "text - section A"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🧭 01. Each person compared with their own usual activity"
+      },
+      "name": "title-01"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "5ef61b29-eaa2-4ed7-85b6-4656977c45c3",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc01",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc01"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Baseline used for comparison | The immediately previous period of the same length |\n| Normal change band | `+/- {W_NormalBandPct}%` |\n| Target user filter | `{W_TargetUser}` *(blank means all users)* |\n\nThis view compares each person's Microsoft 365 activity during the selected period against their own previous period of the same length. It highlights people whose activity has risen or fallen outside the normal change band.\n\nThis is a review indicator only. It is not a productivity score and it is not a confirmed security finding. A change is often explained by leave, a role change, a project, onboarding or offboarding.\n\n#### Column guide\n\n`B_` means **Baseline** (the previous period). `C_` means **Current** (the selected period).\n\n| Column | What it means |\n|---|---|\n| `UserDisplayName` | The person's display name. |\n| `UPN` | The user principal name, usually their sign-in address. |\n| `B_ActiveDayRatio` | How often they were active in the baseline period. `0.80` means active on about 80% of days. |\n| `C_ActiveDayRatio` | How often they were active in the selected period. |\n| `ActiveDayChangePct` | The percentage change in active days between baseline and current. Negative means active on fewer days than usual; positive means more. |\n| `B_EventsPerDay` | Average activity events per day in the baseline period. |\n| `C_EventsPerDay` | Average activity events per day in the selected period. |\n| `EventRateChangePct` | The percentage change in events per day between baseline and current. |\n| `B_Workloads` | How many Microsoft 365 apps they used in the baseline period. |\n| `C_Workloads` | How many Microsoft 365 apps they used in the selected period. |\n| `B_Events` | Total activity events in the baseline period. |\n| `C_Events` | Total activity events in the selected period. |\n| `Status` | The review status, explained below. |\n\n#### Status guide\n\n| `Status` | Meaning | Action |\n|---|---|---|\n| `Within normal range` | Activity is broadly in line with their own past pattern. | No action needed. |\n| `Increase - review only` | More active than usual versus their baseline. | Review in business context. |\n| `Decrease - review only` | Less active than usual versus their baseline. | Review in business context. |\n| `Insufficient baseline (low confidence)` | Not enough past activity to compare reliably. | Treat the result carefully. |\n| `No baseline activity` | No past activity was available to compare. | Review only if current activity looks unusual. |\n\n#### What is included\n\nEveryday staff activity is counted: email sent, file work, SharePoint and OneDrive use, Teams messages and changes, and meeting participation. Guests, system accounts, SharePoint system accounts and listed service accounts are excluded, so the view focuses on normal staff activity. The headline measure is active days, which is harder to inflate than a raw event count.\n\n#### How rows are sorted\n\nRows show the largest fall in active days first, so the biggest drops are at the top."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc01"
+      },
+      "name": "desc-01"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let CurrentStart = todatetime('{W_TimeRange:start}');\nlet EndTime = todatetime('{W_TimeRange:end}');\nlet ReportDays = (EndTime - CurrentStart) / 1d;\nlet BaselineStart = CurrentStart - (EndTime - CurrentStart);\nlet BaselineDays = ReportDays;\nlet NormalBandPct = {W_NormalBandPct};\nlet MinBaselineEvents = 20;\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet OfficeMetrics = (winStart:datetime, winEnd:datetime, days:real) { OfficeActivity | where TimeGenerated >= winStart and TimeGenerated < winEnd | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | where '{W_TargetUser}' == '' or UPN == tolower('{W_TargetUser}') | summarize Events = count(), ActiveDays = dcount(bin(TimeGenerated, 1d)), Workloads = dcount(OfficeWorkload) by UPN | extend EventsPerDay = round(todouble(Events) / days, 2), ActiveDayRatio = round(todouble(ActiveDays) / days, 3) };\nlet Baseline = OfficeMetrics(BaselineStart, CurrentStart, BaselineDays);\nlet Current = OfficeMetrics(CurrentStart, EndTime, ReportDays);\nlet UserList = SigninLogs | where TimeGenerated >= BaselineStart | where UserType =~ 'Member' | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName) | project UPN, UserDisplayName;\nBaseline | join kind=fullouter Current on UPN | extend UPN = coalesce(UPN, UPN1) | extend B_ActiveDayRatio = coalesce(ActiveDayRatio, 0.0), C_ActiveDayRatio = coalesce(ActiveDayRatio1, 0.0), B_EventsPerDay = coalesce(EventsPerDay, 0.0), C_EventsPerDay = coalesce(EventsPerDay1, 0.0), B_Events = coalesce(Events, 0), C_Events = coalesce(Events1, 0), B_Workloads = coalesce(Workloads, 0), C_Workloads = coalesce(Workloads1, 0) | extend ActiveDayChangePct = iff(B_ActiveDayRatio > 0, round((C_ActiveDayRatio - B_ActiveDayRatio) / B_ActiveDayRatio * 100, 1), real(null)), EventRateChangePct = iff(B_EventsPerDay > 0, round((C_EventsPerDay - B_EventsPerDay) / B_EventsPerDay * 100, 1), real(null)) | extend Status = case(B_Events < MinBaselineEvents, 'Insufficient baseline (low confidence)', isnull(ActiveDayChangePct), 'No baseline activity', abs(ActiveDayChangePct) <= NormalBandPct, 'Within normal range', ActiveDayChangePct > NormalBandPct, 'Increase - review only', 'Decrease - review only') | join kind=leftouter UserList on UPN | where isnotempty(UserDisplayName) | project UserDisplayName, UPN, B_ActiveDayRatio, C_ActiveDayRatio, ActiveDayChangePct, B_EventsPerDay, C_EventsPerDay, EventRateChangePct, B_Workloads, C_Workloads, B_Events, C_Events, Status | order by ActiveDayChangePct asc nulls last",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "Status",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Increase - review only",
+                    "representation": "trendup",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Decrease - review only",
+                    "representation": "trenddown",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Within normal range",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Insufficient baseline (low confidence)",
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "query-01"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🗂️ 02. Each person's change, app by app"
+      },
+      "name": "title-02"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "4c9b2b22-f647-40eb-be02-7087946b3bd2",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc02",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc02"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Baseline used for comparison | The immediately previous period of the same length |\n| Normal change band | `+/- {W_NormalBandPct}%` |\n| Target user filter | `{W_TargetUser}` *(blank means all users)* |\n\nThis view breaks each person's activity change down by Microsoft 365 app, so you can see which app moved, for example Teams up while SharePoint is down. It compares the selected period against the same person's previous period of the same length.\n\nThis is a review indicator only. It is not a productivity score and not a confirmed finding. A change is often explained by normal business activity.\n\n#### Column guide\n\n`B_` means **Baseline** (the previous period). `C_` means **Current** (the selected period).\n\n| Column | What it means |\n|---|---|\n| `UserDisplayName` | The person's display name. |\n| `UPN` | The user principal name, usually their sign-in address. |\n| `Workload` | The Microsoft 365 app, for example Exchange (email), SharePoint, OneDrive or Microsoft Teams. |\n| `B_EventsPerDay` | Average events per day in this app during the baseline period. |\n| `C_EventsPerDay` | Average events per day in this app during the selected period. |\n| `ChangePct` | The percentage change in events per day for this app. Negative means less than usual; positive means more. |\n| `B_Events` | Total events in this app during the baseline period. |\n| `C_Events` | Total events in this app during the selected period. |\n| `Status` | The review status, explained below. |\n\n#### Status guide\n\n| `Status` | Meaning | Action |\n|---|---|---|\n| `Within normal range` | This app's activity is in line with their past pattern. | No action needed. |\n| `Increase - review only` | More activity in this app than usual. | Review in business context. |\n| `Decrease - review only` | Less activity in this app than usual. | Review in business context. |\n| `Insufficient baseline (low confidence)` | Not enough past activity in this app to compare reliably. | Treat the result carefully. |\n| `No baseline activity` | No past activity in this app to compare. | Review only if current activity looks unusual. |\n\n#### What is included\n\nThe same everyday staff activity as the headline view, split by app. Guests, system accounts and listed service accounts are excluded.\n\n#### How rows are sorted\n\nRows are grouped by person, then by app name."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc02"
+      },
+      "name": "desc-02"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let CurrentStart = todatetime('{W_TimeRange:start}');\nlet EndTime = todatetime('{W_TimeRange:end}');\nlet ReportDays = (EndTime - CurrentStart) / 1d;\nlet BaselineStart = CurrentStart - (EndTime - CurrentStart);\nlet BaselineDays = ReportDays;\nlet NormalBandPct = {W_NormalBandPct};\nlet MinBaselineEvents = 10;\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet WorkloadMetrics = (winStart:datetime, winEnd:datetime, days:real) { OfficeActivity | where TimeGenerated >= winStart and TimeGenerated < winEnd | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | where '{W_TargetUser}' == '' or UPN == tolower('{W_TargetUser}') | summarize Events = count(), ActiveDays = dcount(bin(TimeGenerated, 1d)) by UPN, Workload = tostring(OfficeWorkload) | extend EventsPerDay = round(todouble(Events) / days, 2) };\nlet Baseline = WorkloadMetrics(BaselineStart, CurrentStart, BaselineDays);\nlet Current = WorkloadMetrics(CurrentStart, EndTime, ReportDays);\nlet UserList = SigninLogs | where TimeGenerated >= BaselineStart | where UserType =~ 'Member' | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName) | project UPN, UserDisplayName;\nBaseline | join kind=fullouter Current on UPN, Workload | extend UPN = coalesce(UPN, UPN1), Workload = coalesce(Workload, Workload1) | extend B_EventsPerDay = coalesce(EventsPerDay, 0.0), C_EventsPerDay = coalesce(EventsPerDay1, 0.0), B_Events = coalesce(Events, 0), C_Events = coalesce(Events1, 0) | extend ChangePct = iff(B_EventsPerDay > 0, round((C_EventsPerDay - B_EventsPerDay) / B_EventsPerDay * 100, 1), real(null)) | extend Status = case(B_Events < MinBaselineEvents, 'Insufficient baseline (low confidence)', isnull(ChangePct), 'No baseline activity', abs(ChangePct) <= NormalBandPct, 'Within normal range', ChangePct > NormalBandPct, 'Increase - review only', 'Decrease - review only') | join kind=leftouter UserList on UPN | where isnotempty(UserDisplayName) | project UserDisplayName, UPN, Workload, B_EventsPerDay, C_EventsPerDay, ChangePct, B_Events, C_Events, Status | order by UPN asc, Workload asc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "Status",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Increase - review only",
+                    "representation": "trendup",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Decrease - review only",
+                    "representation": "trenddown",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Within normal range",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Insufficient baseline (low confidence)",
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "query-02"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 📈 03. Activity over time"
+      },
+      "name": "title-03"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "310e77bc-fb55-4233-8066-e104ee7203ab",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc03",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc03"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Target user filter | `{W_TargetUser}` *(blank means the whole organisation)* |\n\nThis is a line chart of activity over time, with one line per Microsoft 365 app. It uses hourly buckets, so a one-day report still shows detail through the day. It helps you see whether a change was gradual or sudden, and which app drove it. Leave the user filter blank for the whole organisation, or set it to focus on one person.\n\nThis is an operational trend view. A change may be expected due to known business activity, holidays, maintenance, onboarding, offboarding or service changes.\n\n#### What the chart shows\n\n| Element | What it means |\n|---|---|\n| Horizontal axis (`TimeGenerated`) | The time bucket the activity happened in (hourly). |\n| Vertical axis (`Events`) | The number of activity events counted in that bucket. |\n| Lines (`Workload`) | One line per Microsoft 365 app, for example Exchange, SharePoint, OneDrive or Microsoft Teams. |\n\n#### What is included\n\nEveryday staff activity only. Guests, system accounts and listed service accounts are excluded."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc03"
+      },
+      "name": "desc-03"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _start = todatetime('{W_TimeRange:start}');\nlet _end = todatetime('{W_TimeRange:end}');\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet TargetUser = '{W_TargetUser}';\nOfficeActivity | where TimeGenerated >= _start and TimeGenerated < _end | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | where TargetUser == '' or UPN == tolower(TargetUser) | summarize Events = count() by bin(TimeGenerated, 1h), Workload = tostring(OfficeWorkload) | order by TimeGenerated asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "query-03"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🔐 04. Days signed in, compared with usual"
+      },
+      "name": "title-04"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "72a6ca1f-0310-45a1-969a-3eed0048998c",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc04",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc04"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Baseline used for comparison | The immediately previous period of the same length |\n| Normal change band | `+/- {W_NormalBandPct}%` |\n| Target user filter | `{W_TargetUser}` *(blank means all users)* |\n\nThis view counts how many days each person actually signed in, and compares it with their own previous period. It is an independent cross-check on the activity views, using sign-in records rather than app activity.\n\nThis is a review indicator only. Fewer sign-in days can simply mean leave or part-time work.\n\n#### Column guide\n\n`B_` means **Baseline** (the previous period). `C_` means **Current** (the selected period).\n\n| Column | What it means |\n|---|---|\n| `UserDisplayName` | The person's display name. |\n| `UPN` | The user principal name, usually their sign-in address. |\n| `B_SignInDays` | Number of days with a successful sign-in in the baseline period. |\n| `C_SignInDays` | Number of days with a successful sign-in in the selected period. |\n| `B_Ratio` | How often they signed in across baseline days. `0.80` means about 80% of days. |\n| `C_Ratio` | How often they signed in across the selected period. |\n| `ChangePct` | The percentage change in sign-in days between baseline and current. Negative means fewer than usual. |\n| `B_Apps` | Number of different apps signed into during the baseline period. |\n| `C_Apps` | Number of different apps signed into during the selected period. |\n| `Status` | The review status, explained below. |\n\n#### Status guide\n\n| `Status` | Meaning | Action |\n|---|---|---|\n| `Within normal range` | Sign-in pattern is in line with their past. | No action needed. |\n| `Increase - review only` | Signed in on more days than usual. | Review in business context. |\n| `Decrease - review only` | Signed in on fewer days than usual. | Review in business context. |\n| `Insufficient baseline (low confidence)` | Not enough sign-in history to compare reliably. | Treat the result carefully. |\n| `No baseline activity` | No sign-in history was available to compare. | Review only if current activity looks unusual. |\n\n#### What is included\n\nSuccessful, interactive staff sign-ins from Entra ID. Listed service accounts are excluded. Background and automated sign-ins are not counted, so this reflects a person actually signing in.\n\n#### How rows are sorted\n\nRows show the largest fall in sign-in activity first."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc04"
+      },
+      "name": "desc-04"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let CurrentStart = todatetime('{W_TimeRange:start}');\nlet EndTime = todatetime('{W_TimeRange:end}');\nlet ReportDays = (EndTime - CurrentStart) / 1d;\nlet BaselineStart = CurrentStart - (EndTime - CurrentStart);\nlet BaselineDays = ReportDays;\nlet NormalBandPct = {W_NormalBandPct};\nlet MinBaselineDays = 3;\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet SigninMetrics = (winStart:datetime, winEnd:datetime, days:real) { SigninLogs | where TimeGenerated >= winStart and TimeGenerated < winEnd | where UserType =~ 'Member' | where ResultType == 0 | extend UPN = tolower(UserPrincipalName) | where UPN !in (ServiceAccountUPNs) | where '{W_TargetUser}' == '' or UPN == tolower('{W_TargetUser}') | summarize SignInDays = dcount(bin(TimeGenerated, 1d)), DistinctApps = dcount(AppDisplayName), arg_max(TimeGenerated, UserDisplayName) by UPN | extend SignInDayRatio = round(todouble(SignInDays) / days, 3) };\nlet Baseline = SigninMetrics(BaselineStart, CurrentStart, BaselineDays);\nlet Current = SigninMetrics(CurrentStart, EndTime, ReportDays);\nBaseline | join kind=fullouter Current on UPN | extend UPN = coalesce(UPN, UPN1), UserDisplayName = coalesce(UserDisplayName1, UserDisplayName) | extend B_SignInDays = coalesce(SignInDays, 0), C_SignInDays = coalesce(SignInDays1, 0), B_Ratio = coalesce(SignInDayRatio, 0.0), C_Ratio = coalesce(SignInDayRatio1, 0.0), B_Apps = coalesce(DistinctApps, 0), C_Apps = coalesce(DistinctApps1, 0) | extend ChangePct = iff(B_Ratio > 0, round((C_Ratio - B_Ratio) / B_Ratio * 100, 1), real(null)) | extend Status = case(B_SignInDays < MinBaselineDays, 'Insufficient baseline (low confidence)', isnull(ChangePct), 'No baseline activity', abs(ChangePct) <= NormalBandPct, 'Within normal range', ChangePct > NormalBandPct, 'Increase - review only', 'Decrease - review only') | where isnotempty(UserDisplayName) | project UserDisplayName, UPN, B_SignInDays, C_SignInDays, B_Ratio, C_Ratio, ChangePct, B_Apps, C_Apps, Status | order by ChangePct asc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "Status",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Increase - review only",
+                    "representation": "trendup",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Decrease - review only",
+                    "representation": "trenddown",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Within normal range",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Insufficient baseline (low confidence)",
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "unknown",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "query-04"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🚩 05. People worth a closer look"
+      },
+      "name": "title-05"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "03a56a9f-d48e-4a5c-80a5-f30ab65df7f8",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc05",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc05"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Baseline used for comparison | The immediately previous period of the same length |\n| Normal change band | `+/- {W_NormalBandPct}%` |\n| Target user filter | `{W_TargetUser}` *(blank means all users)* |\n\nThis is the short list. It shows only the people whose active-day pattern moved outside the normal change band compared with their own history, and only where there was enough past activity to be confident. People with steady activity are not shown.\n\nThis is a review indicator only, a prompt for a conversation in business context. It is not a productivity score and not a confirmed finding.\n\n#### Column guide\n\n`B_` means **Baseline** (the previous period). `C_` means **Current** (the selected period).\n\n| Column | What it means |\n|---|---|\n| `UserDisplayName` | The person's display name. |\n| `UPN` | The user principal name, usually their sign-in address. |\n| `Direction` | Whether the change was an increase or a decrease (see below). |\n| `ChangePct` | The percentage change in active days versus baseline. The sign shows the direction and the size shows how big the change is. |\n| `B_ActiveDayRatio` | How often they were active in the baseline period. |\n| `C_ActiveDayRatio` | How often they were active in the selected period. |\n| `B_Events` | Total activity events in the baseline period. |\n| `C_Events` | Total activity events in the selected period. |\n\n#### Direction guide\n\n| `Direction` | Meaning | Action |\n|---|---|---|\n| `Increase - review only` | More active than usual versus their baseline. | Review in business context. |\n| `Decrease - review only` | Less active than usual versus their baseline. | Review in business context. |\n\n#### What is included\n\nOnly people with a reliable baseline (enough past activity) whose change is beyond `+/- {W_NormalBandPct}%`. The same everyday staff activity and exclusions as the other views apply.\n\n#### How rows are sorted\n\nRows show the largest change first, whether it is an increase or a decrease."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc05"
+      },
+      "name": "desc-05"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let CurrentStart = todatetime('{W_TimeRange:start}');\nlet EndTime = todatetime('{W_TimeRange:end}');\nlet ReportDays = (EndTime - CurrentStart) / 1d;\nlet BaselineStart = CurrentStart - (EndTime - CurrentStart);\nlet BaselineDays = ReportDays;\nlet NormalBandPct = {W_NormalBandPct};\nlet MinBaselineEvents = 20;\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet OfficeMetrics = (winStart:datetime, winEnd:datetime, days:real) { OfficeActivity | where TimeGenerated >= winStart and TimeGenerated < winEnd | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | where '{W_TargetUser}' == '' or UPN == tolower('{W_TargetUser}') | summarize Events = count(), ActiveDays = dcount(bin(TimeGenerated, 1d)) by UPN | extend ActiveDayRatio = round(todouble(ActiveDays) / days, 3) };\nlet Baseline = OfficeMetrics(BaselineStart, CurrentStart, BaselineDays);\nlet Current = OfficeMetrics(CurrentStart, EndTime, ReportDays);\nlet UserList = SigninLogs | where TimeGenerated >= BaselineStart | where UserType =~ 'Member' | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName) | project UPN, UserDisplayName;\nBaseline | join kind=fullouter Current on UPN | extend UPN = coalesce(UPN, UPN1) | extend B_ActiveDayRatio = coalesce(ActiveDayRatio, 0.0), C_ActiveDayRatio = coalesce(ActiveDayRatio1, 0.0), B_Events = coalesce(Events, 0), C_Events = coalesce(Events1, 0) | where B_Events >= MinBaselineEvents and B_ActiveDayRatio > 0 | extend ChangePct = round((C_ActiveDayRatio - B_ActiveDayRatio) / B_ActiveDayRatio * 100, 1) | where abs(ChangePct) > NormalBandPct | extend Direction = iff(ChangePct > 0, 'Increase - review only', 'Decrease - review only') | join kind=leftouter UserList on UPN | where isnotempty(UserDisplayName) | project UserDisplayName, UPN, Direction, ChangePct, B_ActiveDayRatio, C_ActiveDayRatio, B_Events, C_Events | order by abs(ChangePct) desc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "Direction",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Increase - review only",
+                    "representation": "trendup",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Decrease - review only",
+                    "representation": "trenddown",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "none",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "query-05"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# Section 2. Comparison with the wider organisation\n\n**Supporting context.** How each person sits relative to everyone else, using robust averages that ignore extreme outliers. This is background, not a league table.",
+        "style": "info"
+      },
+      "name": "text - section B"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🏢 06. What \"normal\" looks like across the organisation"
+      },
+      "name": "title-06"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "2455731f-68f8-4fe4-ae7e-7433ca943c9c",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc06",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc06"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Minimum activity to be counted | `{W_MinUserActivity}` events in the period |\n\nThis view shows the organisation's typical daily activity for each Microsoft 365 app. It is the yardstick used by the \"each person compared with the organisation\" view. It uses the median (the middle person) rather than the average, because the average is easily pulled up by a few very heavy users.\n\nThis is background context, not a league table.\n\n#### Column guide\n\n| Column | What it means |\n|---|---|\n| `Workload` | The Microsoft 365 app, for example Exchange, SharePoint, OneDrive or Microsoft Teams. |\n| `Users` | How many people the figures are based on. Small numbers are less reliable. |\n| `Median` | The organisation's typical events per day per person (the middle value, not the average). |\n| `P25` | A lower-activity mark: a quarter of people are below this level. |\n| `P75` | A higher-activity mark: a quarter of people are above this level. |\n| `P90` | A high-activity mark: only about one in ten people are above this level. |\n| `MAD` | How spread out activity is around the typical level. A larger value means people vary more. |\n\n#### What is included\n\nEveryday staff activity only. People below the minimum activity setting (`{W_MinUserActivity}` events) are left out, so very light or one-off accounts do not distort the typical level. Guests, system accounts and listed service accounts are excluded.\n\n#### How rows are sorted\n\nRows are sorted by app name."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc06"
+      },
+      "name": "desc-06"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _start = todatetime('{W_TimeRange:start}');\nlet _end = todatetime('{W_TimeRange:end}');\nlet _days = (_end - _start) / 1d;\nlet MinUserActivity = {W_MinUserActivity};\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet PerUser = OfficeActivity | where TimeGenerated >= _start and TimeGenerated < _end | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | summarize Events = count() by UPN, Workload = tostring(OfficeWorkload) | where Events >= MinUserActivity | extend GroupKey = 'All', EventsPerDay = round(todouble(Events) / _days, 2);\nlet Medians = PerUser | summarize Median = percentile(EventsPerDay, 50) by GroupKey, Workload;\nlet MAD = PerUser | join kind=inner Medians on GroupKey, Workload | extend AbsDev = abs(EventsPerDay - Median) | summarize MAD = percentile(AbsDev, 50) by GroupKey, Workload;\nPerUser | summarize Users = dcount(UPN), Median = round(percentile(EventsPerDay, 50), 2), P25 = round(percentile(EventsPerDay, 25), 2), P75 = round(percentile(EventsPerDay, 75), 2), P90 = round(percentile(EventsPerDay, 90), 2) by GroupKey, Workload | join kind=inner MAD on GroupKey, Workload | project Workload, Users, Median, P25, P75, P90, MAD = round(MAD, 2) | order by Workload asc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true
+        }
+      },
+      "name": "query-06"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### ⚖️ 07. Each person compared with the organisation"
+      },
+      "name": "title-07"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a7d3cd7c-b8bf-478d-9d2b-1cdbffdf47d7",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc07",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc07"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Minimum activity to be counted | `{W_MinUserActivity}` events in the period |\n| Unusual mark | Flagged when well outside the typical range (setting `{W_OutlierZ}`) |\n| Target user filter | `{W_TargetUser}` *(blank means all users)* |\n\nThis view places each person against the wider organisation for each app, and flags the genuinely unusual cases. The organisation's typical level uses the median (the middle person), which is less affected by a few very high or very low users than a simple average.\n\nThis is supporting context, not a league table. Different roles naturally sit in different places, so treat a flag as a question, not a finding.\n\n#### Column guide\n\n| Column | What it means |\n|---|---|\n| `UserDisplayName` | The person's display name. |\n| `UPN` | The user principal name, usually their sign-in address. |\n| `Workload` | The Microsoft 365 app. |\n| `UserEventsPerDay` | This person's average events per day in this app during the selected period. |\n| `GroupMedian` | The organisation's typical events per day for this app (the median). |\n| `PercentileBand` | Where the person sits compared with everyone else (see below). |\n| `ModifiedZ` | How far from typical the person is, on a robust scale. Around `0` is typical; larger numbers, positive or negative, are more unusual. |\n| `OrgFlag` | Whether the person is flagged as unusual (see below). |\n\n#### Where they sit (`PercentileBand`)\n\n| `PercentileBand` | Meaning |\n|---|---|\n| `Below P25 (low vs peers)` | Among the lower-activity quarter. |\n| `P25-P50` | Below the typical level, but not in the lowest quarter. |\n| `P50-P75` | Above the typical level. |\n| `P75-P90` | In the higher-activity range. |\n| `Above P90 (high vs peers)` | Among the most active one in ten. |\n\n#### Flag (`OrgFlag`)\n\n| `OrgFlag` | Meaning | Action |\n|---|---|---|\n| `Typical` | Within the normal range for the organisation. | No action needed. |\n| `Outlier - review only` | Well outside the normal range. | Worth a look in business context. |\n\n#### What is included\n\nEveryday staff activity. Every person who is active anywhere in the period now has a row for **every** Microsoft 365 app, so an app with no activity shows as `0` (and usually sits in `Below P25`) instead of being missing. The organisation's typical levels (median and percentiles) are still worked out only from people with at least `{W_MinUserActivity}` events in that app, so a handful of barely-used accounts do not distort them. Guests, system accounts and listed service accounts are excluded.\n\n#### How rows are sorted\n\nRows are grouped by app, then show the most unusual high-activity people first; people with little or no activity in that app sit at the bottom of each group."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc07"
+      },
+      "name": "desc-07"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _start = todatetime('{W_TimeRange:start}');\nlet _end = todatetime('{W_TimeRange:end}');\nlet _days = (_end - _start) / 1d;\nlet MinUserActivity = {W_MinUserActivity};\nlet OutlierZ = {W_OutlierZ};\nlet TargetUser = '{W_TargetUser}';\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet RawPerUser = OfficeActivity | where TimeGenerated >= _start and TimeGenerated < _end | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | summarize Events = count() by UPN, Workload = tostring(OfficeWorkload) | extend EventsPerDay = round(todouble(Events) / _days, 2);\nlet PerUser = RawPerUser | where Events >= MinUserActivity;\nlet Workloads = PerUser | distinct Workload;\nlet Stats = PerUser | summarize Median = percentile(EventsPerDay, 50), P25 = percentile(EventsPerDay, 25), P75 = percentile(EventsPerDay, 75), P90 = percentile(EventsPerDay, 90) by Workload;\nlet MAD = PerUser | join kind=inner Stats on Workload | extend AbsDev = abs(EventsPerDay - Median) | summarize MAD = percentile(AbsDev, 50) by Workload;\nlet DisplayUsers = PerUser | distinct UPN | where TargetUser == '' or UPN == tolower(TargetUser);\nlet UserList = SigninLogs | where TimeGenerated >= _start | where UserType =~ 'Member' | summarize arg_max(TimeGenerated, UserDisplayName) by UPN = tolower(UserPrincipalName) | project UPN, UserDisplayName;\nDisplayUsers | extend _k = 1 | join kind=inner (Workloads | extend _k = 1) on _k | project UPN, Workload | lookup kind=leftouter (RawPerUser | project UPN, Workload, EventsPerDay) on UPN, Workload | extend EventsPerDay = coalesce(EventsPerDay, 0.0) | lookup kind=inner Stats on Workload | lookup kind=inner MAD on Workload | extend ModifiedZ = iff(MAD == 0, 0.0, round(0.6745 * (EventsPerDay - Median) / MAD, 2)) | extend PercentileBand = case(EventsPerDay < P25, 'Below P25 (low vs peers)', EventsPerDay < Median, 'P25-P50', EventsPerDay < P75, 'P50-P75', EventsPerDay < P90, 'P75-P90', 'Above P90 (high vs peers)') | extend OrgFlag = iff(abs(ModifiedZ) > OutlierZ, 'Outlier - review only', 'Typical') | lookup kind=leftouter UserList on UPN | where isnotempty(UserDisplayName) | project UserDisplayName, UPN, Workload, UserEventsPerDay = EventsPerDay, GroupMedian = round(Median, 2), PercentileBand, ModifiedZ, OrgFlag | order by Workload asc, ModifiedZ desc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "OrgFlag",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Outlier - review only",
+                    "representation": "warning",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "query-07"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🌐 08. The organisation's activity over time"
+      },
+      "name": "title-08"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "1c09544e-47cc-4fc8-8ab5-f0b9863e8f71",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc08",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc08"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n\nThis is a line chart of the whole organisation's activity over time for each Microsoft 365 app, using hourly buckets so a one-day report still shows detail. It is shown as an average per active person, so it is not skewed by how many people happened to be active in each bucket. It is useful for spotting organisation-wide effects such as public holidays or quiet periods.\n\nThis is an operational trend view. A change may be expected due to known business activity.\n\n#### What the chart shows\n\n| Element | What it means |\n|---|---|\n| Horizontal axis (`TimeBin`) | The time bucket (hourly). |\n| Vertical axis (`AvgEventsPerActiveUser`) | The average number of activity events per active person in that bucket. |\n| Lines (`Workload`) | One line per Microsoft 365 app. |\n\n#### What is included\n\nEveryday staff activity only. Guests, system accounts and listed service accounts are excluded."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc08"
+      },
+      "name": "desc-08"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _start = todatetime('{W_TimeRange:start}');\nlet _end = todatetime('{W_TimeRange:end}');\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nOfficeActivity | where TimeGenerated >= _start and TimeGenerated < _end | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | summarize Events = count(), ActiveUsers = dcount(UPN) by TimeBin = bin(TimeGenerated, 1h), Workload = tostring(OfficeWorkload) | extend AvgEventsPerActiveUser = round(todouble(Events) / ActiveUsers, 2) | project TimeBin, Workload, AvgEventsPerActiveUser | order by TimeBin asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "query-08"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 👤 vs 🌐 11. One person against the organisation over time"
+      },
+      "name": "title-11"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "e9a1bf6f-d4c9-4475-a3ed-0fd85bb371c0",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc11",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc11"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Person shown | `{W_TargetUser}` *(set this to choose the person)* |\n\nThis chart draws one person's activity and the organisation's average on the same chart, over time and using hourly buckets so a one-day report still shows detail. The gap between the two lines shows, bucket by bucket, whether the person is running above or below the typical level. Set the user filter to choose the person.\n\nThis is supporting context, not a league table.\n\n#### What the chart shows\n\n| Element | What it means |\n|---|---|\n| Horizontal axis (`TimeBin`) | The time bucket (hourly). |\n| Vertical axis (`Value`) | The number of activity events in that bucket. |\n| `Series` = `User` | The selected person's activity in each bucket. |\n| `Series` = `Org avg / active user` | The organisation's average activity per active person. |\n\n#### What is included\n\nEveryday staff activity only. Guests, system accounts and listed service accounts are excluded. If the user filter is blank, only the organisation line appears."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc11"
+      },
+      "name": "desc-11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _start = todatetime('{W_TimeRange:start}');\nlet _end = todatetime('{W_TimeRange:end}');\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet TargetUser = '{W_TargetUser}';\nlet Base = materialize(OfficeActivity | where TimeGenerated >= _start and TimeGenerated < _end | where UserType == 'Regular' | where Operation in (MeaningfulOps) | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | summarize Events = count() by TimeBin = bin(TimeGenerated, 1h), UPN);\nlet UserSeries = Base | where UPN == tolower(TargetUser) | summarize Value = todouble(sum(Events)) by TimeBin | extend Series = 'User';\nlet OrgSeries = Base | summarize Value = round(todouble(sum(Events)) / dcount(UPN), 2) by TimeBin | extend Series = 'Org avg / active user';\nunion UserSeries, OrgSeries | project TimeBin, Series, Value | order by TimeBin asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "query-11"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# Section 3. Drill-down: the detail behind the numbers\n\nUse these to understand *what* actually drove a figure before drawing any conclusion.",
+        "style": "info"
+      },
+      "name": "text - section C"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🔎 09. The detail behind one person's numbers"
+      },
+      "name": "title-09"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "caa0bb04-a9a5-4a79-9c05-4c1b5e13612b",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc09",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc09"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n| Person shown | `{W_TargetUser}` *(required; the view is empty until set)* |\n\nThis view lists the individual activity records for one person, most recent first. Use it to understand what actually sits behind a number in the other views before drawing any conclusion. The view stays empty until a person is chosen.\n\nThis is detailed personal data. Open it only when there is a clear and proportionate reason, and handle it carefully.\n\n#### Column guide\n\n| Column | What it means |\n|---|---|\n| `TimeGenerated` | When the activity happened. |\n| `UPN` | The person's sign-in address. |\n| `OfficeWorkload` | The Microsoft 365 app, for example Exchange, SharePoint, OneDrive or Microsoft Teams. |\n| `Operation` | The specific action recorded, for example a file upload or a message sent. |\n| `RecordType` | The category of audit record the action belongs to. |\n| `ResultStatus` | Whether the action succeeded. |\n| `ClientIP` | The network address the action came from. |\n| `UserAgent` | The browser or app used. |\n| `OfficeObjectId` | The item involved, such as a file or site path. |\n| `SourceFileName` | The file name, where the action involved a file. |\n| `Site_Url` | The SharePoint or OneDrive site address, where relevant. |\n\n#### What is included\n\nEveryday staff activity for the chosen person only. Some columns may be blank when they do not apply to a particular action.\n\n#### How rows are sorted\n\nRows show the most recent activity first."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc09"
+      },
+      "name": "desc-09"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _start = todatetime('{W_TimeRange:start}');\nlet _end = todatetime('{W_TimeRange:end}');\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet MeaningfulOps = dynamic(['Send','SendAs','SendOnBehalf','FileUploaded','FileModified','FileCheckedIn','FileRenamed','FileMoved','FileDownloaded','ClientViewSignaled','PageViewed','MessageSent','MessageEdited','ChatCreated','TeamCreated','ChannelAdded','MeetingParticipantDetail']);\nlet TargetUser = '{W_TargetUser}';\nOfficeActivity | where TimeGenerated >= _start and TimeGenerated < _end | where UserType == 'Regular' | extend UPN = tolower(tostring(UserId)) | where TargetUser != '' and UPN == tolower(TargetUser) | where UPN !in (ServiceAccountUPNs) | where Operation in (MeaningfulOps) | project TimeGenerated, UPN, OfficeWorkload, Operation, RecordType, ResultStatus, ClientIP, UserAgent, OfficeObjectId, SourceFileName, Site_Url | order by TimeGenerated desc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true
+        }
+      },
+      "name": "query-09"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "### 🧩 10. Activity types: what counts and what is background noise"
+      },
+      "name": "title-10"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "be9e2250-1b53-46f6-b5b3-569be71016b2",
+            "version": "KqlParameterItem/1.0",
+            "name": "W_Desc10",
+            "label": "Description",
+            "type": 10,
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "jsonData": "[\n  {\n    \"value\": \"Show\",\n    \"label\": \"Show\",\n    \"selected\": true\n  },\n  {\n    \"value\": \"Hide\",\n    \"label\": \"Hide\",\n    \"selected\": false\n  }\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "toggle-W_Desc10"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "| Workbook context | Value |\n|---|---|\n| Selected period | `{W_TimeRange:start}` to `{W_TimeRange:end}` |\n\nThis view lists every type of activity seen in the period and shows whether it is counted as meaningful staff activity or treated as background and system noise. It is mainly a check that the other views are focusing on the right activity.\n\nThis is a configuration and quality check. It is not a security view and not a performance view.\n\n#### Column guide\n\n| Column | What it means |\n|---|---|\n| `Workload` | The Microsoft 365 app. |\n| `Operation` | The specific action recorded. |\n| `Category` | A plain grouping for the action, for example email, file authoring, file access or sharing. |\n| `EngagementSignal` | Whether the action is counted as meaningful staff activity (see below). |\n| `Events` | How many times the action occurred in the period. |\n| `Users` | How many different people performed the action. |\n\n#### Meaning of `EngagementSignal`\n\n| `EngagementSignal` | Meaning |\n|---|---|\n| `Yes` | Counted as meaningful staff activity in the other views. |\n| `No` | Treated as background or system noise, and not counted. |\n| `UNMAPPED` | A new action that has not been classified yet. Worth assigning to a category. |\n\n#### How rows are sorted\n\nUnclassified actions appear first, then the highest event counts, so anything new or high-volume stands out."
+      },
+      "conditionalVisibility": {
+        "value": "Show",
+        "comparison": "isEqualTo",
+        "parameterName": "W_Desc10"
+      },
+      "name": "desc-10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let _start = todatetime('{W_TimeRange:start}');\nlet _end = todatetime('{W_TimeRange:end}');\nlet ServiceAccountUPNs = toscalar(union isfuzzy=true (datatable(UPN:string)[]), (_GetWatchlist('service-accounts') | project UPN = tostring(UPN)) | summarize make_set(tolower(UPN)));\nlet ExcludedUPNs = dynamic(['app@sharepoint','system@sharepoint']);\nlet Taxonomy = datatable(Operation:string, Category:string, EngagementSignal:string)['Send','Email-Communication','Yes','SendAs','Email-Communication','Yes','SendOnBehalf','Email-Communication','Yes','FileUploaded','Content-Authoring','Yes','FileModified','Content-Authoring','Yes','FileCheckedIn','Content-Authoring','Yes','FileRenamed','Content-Authoring','Yes','FileMoved','Content-Authoring','Yes','FileDownloaded','Content-Collaboration','Yes','ClientViewSignaled','Content-Collaboration','Yes','PageViewed','Content-Collaboration','Yes','MessageSent','Teams-Communication','Yes','MessageEdited','Teams-Communication','Yes','ChatCreated','Teams-Communication','Yes','TeamCreated','Teams-Communication','Yes','ChannelAdded','Teams-Communication','Yes','MeetingParticipantDetail','Meetings','Yes','Update','Mailbox-Activity','No','FileSyncDownloadedFull','Background-Sync','No','FileSyncUploadedFull','Background-Sync','No','FileSyncDownloadedPartial','Background-Sync','No','FileModifiedExtended','Background-Sync','No','FileUploadedPartial','Background-Sync','No','TeamsMeetingRecordingUploaded','Background-Sync','No','FileAccessed','Read-Access','No','FilePreviewed','Read-Access','No','MailItemsAccessed','Read-Access','No','Create','Read-Access','No','MessagesListed','Read-Access','No','FileAccessedExtended','Read-Access','No','AttachmentAccess','Read-Access','No','ListViewed','Read-Access','No','ListItemViewed','Read-Access','No','PagePrefetched','Read-Access','No','PageViewedExtended','Read-Access','No','SharingLinkUsed','Read-Access','No','CompanyLinkUsed','Read-Access','No','SecureLinkUsed','Read-Access','No','PreAuthTokenUsed','Read-Access','No','PreAuthTokenUsedExtended','Read-Access','No','MessageReadReceiptReceived','Read-Access','No','FileTimelineMetadataAccessed','Read-Access','No','PerformedCardAction','Read-Access','No','MoveToDeletedItems','Content-Lifecycle','No','SoftDelete','Content-Lifecycle','No','HardDelete','Content-Lifecycle','No','FileRecycled','Content-Lifecycle','No','FolderRecycled','Content-Lifecycle','No','ListItemDeleted','Content-Lifecycle','No','ListItemRecycled','Content-Lifecycle','No','ListItemRestored','Content-Lifecycle','No','FileVersionsAllDeleted','Content-Lifecycle','No','FolderCreated','Content-Management','No','FolderModified','Content-Management','No','FolderMoved','Content-Management','No','FolderRenamed','Content-Management','No','FileCopied','Content-Management','No','FileCheckedOut','Content-Management','No','CustomThumbnailUploaded','Content-Management','No','ListCreated','Content-Management','No','ListUpdated','Content-Management','No','ListItemCreated','Content-Management','No','ListItemUpdated','Content-Management','No','ListColumnCreated','Content-Management','No','ListColumnUpdated','Content-Management','No','ListColumnDeleted','Content-Management','No','ListContentTypeUpdated','Content-Management','No','ListViewCreated','Content-Management','No','ListViewUpdated','Content-Management','No','SharingSet','Sharing-Collaboration','No','SharingLinkCreated','Sharing-Collaboration','No','SharingLinkUpdated','Sharing-Collaboration','No','CompanyLinkCreated','Sharing-Collaboration','No','SecureLinkCreated','Sharing-Collaboration','No','SecureLinkUpdated','Sharing-Collaboration','No','AddedToSharingLink','Sharing-Collaboration','No','AddedToSecureLink','Sharing-Collaboration','No','SharingInvitationCreated','Sharing-Collaboration','No','CommentCreated','Content-Collaboration','No','CommentEdit','Content-Collaboration','No','MessageCreatedHasLink','Teams-Communication','No','MessageEditedHasLink','Teams-Communication','No','MessageUpdated','Teams-Communication','No','ReactedToMessage','Teams-Communication','No','CallParticipantDetail','Meetings','No','MeetingDetail','Meetings','No','SearchQueryPerformed','Search','No','SearchQueryInitiatedSharePoint','Search','No','UserLoggedIn','Security-Signal','No','TeamsSessionStarted','Security-Signal','No','SignInEvent','Security-Signal','No','BaselineSecurityModeThirdPartyAppHPA','Security-Signal','No','SiteAccessWithCustomScripts','Security-Signal','No','New-InboxRule','Administrative','No','AddedToGroup','Administrative','No','RemovedFromGroup','Administrative','No','GroupAdded','Administrative','No','PermissionLevelAdded','Administrative','No','AddFolderPermissions','Administrative','No','RemoveFolderPermissions','Administrative','No','ModifyFolderPermissions','Administrative','No','SharingInheritanceBroken','Administrative','No','SharingRevoked','Administrative','No','FeatureActivated','Administrative','No','TabAdded','Administrative','No','TabUpdated','Administrative','No','TabRemoved','Administrative','No','AppInstalled','Administrative','No','AppUninstalled','Administrative','No','MemberAdded','Administrative','No','MemberRemoved','Administrative','No','UserAccepted','Administrative','No','TeamDeleted','Administrative','No','AppStoreStorefrontTaskGetApps','Administrative','No','SiteCollectionCreated','Administrative','No','SiteCollectionAdminAdded','Administrative','No','SiteCollectionAdminRemoved','Administrative','No','SiteLocksChanged','Administrative','No','SiteCollectionQuotaModified','Administrative','No','SiteDesignInvoked','Administrative','No','ListDesignInvoked','Administrative','No','CommentsDisabled','Administrative','No','SharingPolicyChanged','Administrative','No','SPOTenantCmdlets','Administrative','No'];\nOfficeActivity | where TimeGenerated >= _start and TimeGenerated < _end | where UserType == 'Regular' | extend UPN = tolower(tostring(UserId)) | where UPN !contains '#ext#' | where UPN !in (ExcludedUPNs) and UPN !in (ServiceAccountUPNs) | summarize Events = count(), Users = dcount(UPN) by Workload = tostring(OfficeWorkload), Operation | join kind=leftouter Taxonomy on Operation | extend Category = coalesce(Category, 'UNMAPPED'), EngagementSignal = coalesce(EngagementSignal, 'UNMAPPED') | project Workload, Operation, Category, EngagementSignal, Events, Users | order by toint(EngagementSignal == 'UNMAPPED') desc, Events desc",
+        "size": 0,
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "rowLimit": 1000,
+          "filter": true,
+          "formatters": [
+            {
+              "columnMatch": "EngagementSignal",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "icons",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "Yes",
+                    "representation": "success",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "UNMAPPED",
+                    "representation": "warning",
+                    "text": "{0}{1}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "disabled",
+                    "text": "{0}{1}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "name": "query-10"
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/647ae86e-0a57-4208-ad10-cd71881dd3a8/resourcegroups/rf-australiaeast-prod-security-sentinel-internal-rg/providers/microsoft.operationalinsights/workspaces/rf-sentinel-prod-workspace"
+  ],
+  "fromTemplateId": "sentinel-UserWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

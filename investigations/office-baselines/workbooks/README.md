@@ -17,7 +17,8 @@ the current one.
 
 | File | Built from | What it shows |
 |---|---|---|
-| `DEV_OfficeBaselines-AllQueries_v9.json` | **all** queries `01`-`11` | **Current.** Classifies four previously-`UNMAPPED` operations in panel `10` (`FileVersionsAllDeleted`, `SharingInvitationCreated`, `SharingPolicyChanged`, `SPOTenantCmdlets`). All `EngagementSignal = No`, so the engagement metrics are unchanged. |
+| `DEV_OfficeBaselines-AllQueries_v10.json` | **all** queries `01`-`11` | **Current.** Trend charts (`03`, `08`, `11`) now use **hourly** buckets so a one-day report shows detail through the day. The active-days metrics (`01/02/04/05`) keep daily bins. |
+| `DEV_OfficeBaselines-AllQueries_v9.json` | **all** queries `01`-`11` | Superseded by v10. Classifies four previously-`UNMAPPED` operations in panel `10` (`FileVersionsAllDeleted`, `SharingInvitationCreated`, `SharingPolicyChanged`, `SPOTenantCmdlets`). All `EngagementSignal = No`, so the engagement metrics are unchanged. |
 | `DEV_OfficeBaselines-AllQueries_v8.json` | **all** queries `01`-`11` | Superseded by v9. Customer feedback: (1) panel titles are now always visible (split out of the description so the Show/Hide toggle hides only the body); (2) panel `07` shows every workload per active person, including zeros. |
 | `DEV_OfficeBaselines-AllQueries_v7.json` | **all** queries `01`-`11` | Superseded by v8. Adds status icons to the grids (trend up/down/neutral on the review columns), driven by the `Status` text so the +/- normal band is respected. |
 | `DEV_OfficeBaselines-AllQueries_v6.json` | **all** queries `01`-`11` | Superseded by v7. Full business-friendly panel descriptions synced from `panel-descriptions/NN.md`. Kept for rollback. |
@@ -165,6 +166,18 @@ and B2B guests are excluded exactly as in the source queries.
     metric panel are unchanged. The same rows were added to `queries/drilldown/10-*.kql`,
     `queries/00-*.kql`, `docs/activity-taxonomy.md` and the watchlist CSV so all taxonomy
     copies stay in sync.
+- v10 supersedes v9 (customer feedback), via `dev-scratch/build-workbook-v10.ps1`:
+  - **Hourly trend buckets.** The three time-series charts now bin by `1h` instead of
+    `1d`, so a one-day report shows ~24 points rather than one. Panels: `03` (activity
+    over time), `08` (org over time), `11` (one person vs org). In `08`/`11` the time
+    column was renamed `Day` -> `TimeBin` to match the finer granularity.
+  - **Unchanged on purpose:** the active-days metrics in `01/02/04/05` keep
+    `dcount(bin(..., 1d))` - they count distinct active **days**, so hourly bins would
+    change the metric, not just the chart.
+  - **Divergence:** this is workbook-only. The source `queries/.../03`, `08`, `11` `.kql`
+    files still bin by `1d` (and use `Day`). Note that a long date range with hourly bins
+    produces many points; if that becomes noisy, a date-aware bin size is the better
+    long-term fix (see below).
 
 ### Grid status icons (v7)
 
